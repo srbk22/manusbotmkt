@@ -3861,6 +3861,21 @@ select option { background: var(--bg-card); }
 }
 .operacoes-bar-left { display: flex; align-items: center; gap: 10px; }
 .operacoes-bar-right { display: flex; align-items: center; gap: 10px; }
+.demo-history-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+}
+.demo-history-btn svg { width: 14px; height: 14px; }
+.demo-history-btn:hover { color: #fff; border-color: rgba(255, 90, 31, 0.55); }
 .bar-idle { font-size: 12px; color: var(--text3); }
 .operacoes-body { flex: 1; display: flex; overflow: hidden; min-height: 0; }
 .operacoes-left {

@@ -77,6 +77,7 @@ export default function Operacoes() {
   }
 
   const isRunning = status?.running ?? false
+  const configured = (status?.trades.length ?? 0) > 0
   const currency = 'BRL'
 
   return (
@@ -95,6 +96,24 @@ export default function Operacoes() {
             <span className="bar-idle">Configure o histórico para exibir a sessão</span>
           )}
         </div>
+        {configured && (
+          <div className="operacoes-bar-right">
+            <button
+              type="button"
+              className="demo-history-btn"
+              onClick={() => setConfigOpen(true)}
+              aria-label="Configurar histórico"
+              title="Configurar histórico"
+            >
+              <svg viewBox="0 0 16 16" aria-hidden>
+                <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                <circle cx="5" cy="4" r="1.4" fill="currentColor" />
+                <circle cx="11" cy="8" r="1.4" fill="currentColor" />
+                <circle cx="7" cy="12" r="1.4" fill="currentColor" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="operacoes-mobile-tabs" role="tablist" aria-label="Painéis" data-pane={opsPane}>
@@ -135,20 +154,23 @@ export default function Operacoes() {
         </div>
         <aside className="operacoes-panel">
           <ScoreBoard status={status} activeBalance={balance} currency={currency} />
-          <div className="operacoes-panel-actions">
-            {isRunning && (
-              <button type="button" className="btn-stop btn-stop--panel" onClick={handleStop}>
-                ■ Parar Bot
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn-start btn-start--panel"
-              onClick={() => setConfigOpen(true)}
-            >
-              Configurar histórico
-            </button>
-          </div>
+          {(isRunning || !configured) && (
+            <div className="operacoes-panel-actions">
+              {isRunning ? (
+                <button type="button" className="btn-stop btn-stop--panel" onClick={handleStop}>
+                  ■ Parar Bot
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-start btn-start--panel"
+                  onClick={() => setConfigOpen(true)}
+                >
+                  Configurar histórico
+                </button>
+              )}
+            </div>
+          )}
           <TradeLog trades={status?.trades ?? []} currency={currency} />
         </aside>
       </div>
