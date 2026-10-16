@@ -1,4 +1,5 @@
 import { createServer } from 'node:http'
+import { request as httpsRequest } from 'node:https'
 import { readFile, stat } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -32,6 +33,25 @@ const server = createServer(async (req, res) => {
   if (req.url?.startsWith('/api/health')) {
     res.writeHead(200, { 'content-type': 'application/json' })
     res.end(JSON.stringify({ ok: true, service: 'manusbotmkt' }))
+    return
+  }
+
+  if (req.url?.startsWith('/api/chart/')) {
+    const target = new URL(req.url, 'https://manusbot.up.railway.app')
+    const upstream = httpsRequest(target, {
+      method: req.method,
+      headers: { accept: req.headers.accept || 'text/event-stream' },
+    }, (up) => {
+      const headers = { ...up.headers }
+      delete headers['content-length']
+      res.writeHead(up.statusCode || 502, headers)
+      up.pipe(res)
+    })
+    upstream.on('error', () => {
+      if (!res.headersSent) res.writeHead(502)
+      res.end()
+    })
+    upstream.end()
     return
   }
 

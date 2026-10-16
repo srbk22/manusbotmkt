@@ -1,11 +1,11 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   createChart,
   CandlestickSeries,
   type UTCTimestamp,
 } from 'lightweight-charts'
 
-export interface ChartCandle {
+interface Candle {
   from: number
   open: number
   close: number
@@ -16,26 +16,23 @@ export interface ChartCandle {
 interface Props {
   activeId?: number
   activeTicker?: string
-  candles?: ChartCandle[]
 }
 
-function toSeries(candles: ChartCandle[]) {
-  return candles.map(c => ({
-    // O gráfico desenha o horário em UTC. O deslocamento faz o eixo bater com o relógio local.
-    time: (c.from - new Date(c.from * 1000).getTimezoneOffset() * 60) as UTCTimestamp,
+function toBar(c: Candle) {
+  return {
+    time: c.from as UTCTimestamp,
     open: c.open,
     high: c.max,
     low: c.min,
     close: c.close,
-  }))
+  }
 }
 
-export default function LiveChart({ activeId, activeTicker, candles }: Props) {
+export default function LiveChart({ activeId, activeTicker }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const seriesRef = useRef<ReturnType<ReturnType<typeof createChart>['addSeries']> | null>(null)
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null)
-  const candlesRef = useRef(candles)
-  candlesRef.current = candles
+  const [note, setNote] = useState<string | null>(null)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -90,10 +87,6 @@ export default function LiveChart({ activeId, activeTicker, candles }: Props) {
     chartRef.current = chart
     seriesRef.current = series
     series.setData([])
-    if (candlesRef.current?.length) {
-      series.setData(toSeries(candlesRef.current))
-      chart.timeScale().scrollToRealTime()
-    }
 
     const resizeObserver = new ResizeObserver(() => {
       if (!containerRef.current || !chartRef.current) return
@@ -108,17 +101,51 @@ export default function LiveChart({ activeId, activeTicker, candles }: Props) {
       chartRef.current = null
       seriesRef.current = null
     }
-  }, [activeTicker])
+  }, [])
 
   useEffect(() => {
-    if (!seriesRef.current) return
-    if (!candles?.length) {
-      seriesRef.current.setData([])
+    if (!activeTicker) {
+      seriesRef.current?.setData([])
+      setNote(null)
       return
     }
-    seriesRef.current.setData(toSeries(candles))
-    chartRef.current?.timeScale().scrollToRealTime()
-  }, [candles])
+
+    setNote(null)
+    let stopped = false
+    const source = new EventSource(`/api/chart/stream?ticker=${encodeURIComponent(activeTicker)}`)
+
+    source.addEventListener('history', (event) => {
+      const candles = JSON.parse((event as MessageEvent).data) as Candle[]
+      if (!seriesRef.current) return
+      seriesRef.current.setData((candles ?? []).map(toBar))
+      chartRef.current?.timeScale().scrollToRealTime()
+      setNote(null)
+    })
+
+    source.addEventListener('candle', (event) => {
+      const candle = JSON.parse((event as MessageEvent).data) as Candle
+      seriesRef.current?.update(toBar(candle))
+    })
+
+    source.addEventListener('status', (event) => {
+      const payload = JSON.parse((event as MessageEvent).data) as { error?: string }
+      if (payload.error) {
+        stopped = true
+        seriesRef.current?.setData([])
+        setNote(payload.error)
+        source.close()
+      }
+    })
+
+    source.onerror = () => {
+      if (stopped) return
+      stopped = true
+      setNote('Não foi possível abrir o gráfico ao vivo deste ativo.')
+      source.close()
+    }
+
+    return () => source.close()
+  }, [activeTicker])
 
   return (
     <div className="chart-wrap">
@@ -127,9 +154,9 @@ export default function LiveChart({ activeId, activeTicker, candles }: Props) {
         <span className="chart-tf">M1</span>
       </div>
       <div ref={containerRef} className="chart-container" />
-      {!activeId && (
+      {(!activeId || note) && (
         <div className="chart-placeholder">
-          Configure o histórico para visualizar o gráfico
+          {note ?? 'Escolha o ativo para ver o gráfico ao vivo'}
         </div>
       )}
     </div>

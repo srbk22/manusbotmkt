@@ -6,5 +6,12 @@ export default defineConfig({
   server: {
     port: 5175,
     strictPort: true,
+    proxy: {
+      '/api/chart': {
+        target: 'https://manusbot.up.railway.app',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
   },
 })

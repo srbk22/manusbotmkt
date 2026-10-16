@@ -132,9 +132,8 @@ export default function Operacoes() {
       <div className="operacoes-body">
         <div className="operacoes-left">
           <LiveChart
-            activeId={status?.activeId}
-            activeTicker={status?.activeTicker}
-            candles={candles}
+            activeId={status?.activeTicker || form.pair ? 1 : 0}
+            activeTicker={status?.activeTicker || form.pair}
           />
           <LogConsole logs={logs} />
         </div>
