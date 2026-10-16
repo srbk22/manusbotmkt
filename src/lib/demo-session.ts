@@ -67,6 +67,7 @@ export interface DemoScene {
   startBalance: number
   seed: number
   strategy: DemoStrategy
+  mode: 'static' | 'live'
 }
 
 function money(n: number): number {
@@ -105,7 +106,7 @@ export function planSession(profit: number, operations: number, payout = 0.87): 
   return { profit: p, operations: n, payout: rate, wins, losses, entry, possible }
 }
 
-function layoutResults(wins: number, losses: number, rng: () => number): Array<'WIN' | 'LOSS'> {
+export function layoutResults(wins: number, losses: number, rng: () => number): Array<'WIN' | 'LOSS'> {
   const out: Array<'WIN' | 'LOSS'> = []
   let w = wins
   let l = losses
@@ -130,7 +131,7 @@ function layoutResults(wins: number, losses: number, rng: () => number): Array<'
   return out
 }
 
-function profitsFor(results: Array<'WIN' | 'LOSS'>, entry: number, payout: number, target: number): number[] {
+export function profitsFor(results: Array<'WIN' | 'LOSS'>, entry: number, payout: number, target: number): number[] {
   const winBase = money(entry * payout)
   const profits = results.map(r => (r === 'WIN' ? winBase : -entry))
   const winIdx = results.map((r, i) => (r === 'WIN' ? i : -1)).filter(i => i >= 0)
@@ -337,6 +338,7 @@ export function buildScene(input: {
       startBalance,
       seed,
       strategy,
+      mode: 'static',
     }
   }
 
@@ -404,5 +406,6 @@ export function buildScene(input: {
     startBalance,
     seed,
     strategy,
+    mode: 'static',
   }
 }

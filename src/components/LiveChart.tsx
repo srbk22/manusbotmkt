@@ -16,6 +16,9 @@ interface Candle {
 interface Props {
   activeId?: number
   activeTicker?: string
+  bars?: Candle[]
+  stream?: boolean
+  onStream?: (candles: Candle[]) => void
 }
 
 type Bar = { time: UTCTimestamp; open: number; high: number; low: number; close: number }
@@ -49,7 +52,7 @@ function framePrices(chart: ReturnType<typeof createChart>, bars: Bar[]) {
   chart.priceScale('right').setVisibleRange({ from: low - pad, to: high + pad })
 }
 
-export default function LiveChart({ activeId, activeTicker }: Props) {
+export default function LiveChart({ activeId, activeTicker, bars, stream, onStream }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const seriesRef = useRef<ReturnType<ReturnType<typeof createChart>['addSeries']> | null>(null)
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null)
@@ -126,9 +129,31 @@ export default function LiveChart({ activeId, activeTicker }: Props) {
     }
   }, [])
 
+  const onStreamRef = useRef(onStream)
+  onStreamRef.current = onStream
+
   useEffect(() => {
-    if (!activeTicker) {
-      seriesRef.current?.setData([])
+    if (!seriesRef.current || !chartRef.current) return
+    const next = (bars ?? []).map(toBar).filter((bar): bar is Bar => bar !== null)
+    if (!next.length) {
+      seriesRef.current.setData([])
+      return
+    }
+    const el = containerRef.current
+    if (el) {
+      const rect = el.getBoundingClientRect()
+      chartRef.current.applyOptions({
+        width: Math.max(80, Math.floor(rect.width)),
+        height: Math.max(240, Math.floor(rect.height)),
+      })
+    }
+    seriesRef.current.setData(next)
+    chartRef.current.timeScale().scrollToRealTime()
+    framePrices(chartRef.current, next)
+  }, [bars])
+
+  useEffect(() => {
+    if (!stream || !activeTicker) {
       setNote(null)
       return
     }
@@ -137,33 +162,19 @@ export default function LiveChart({ activeId, activeTicker }: Props) {
     let stopped = false
     let painted = false
     let source: EventSource | null = null
-    const bars: Bar[] = []
+    const candles: Candle[] = []
 
-    const paint = (next: Bar[]) => {
-      if (!seriesRef.current || !chartRef.current || !next.length) return
-      const el = containerRef.current
-      if (el) {
-        const rect = el.getBoundingClientRect()
-        chartRef.current.applyOptions({
-          width: Math.max(80, Math.floor(rect.width)),
-          height: Math.max(240, Math.floor(rect.height)),
-        })
-      }
-      seriesRef.current.setData(next)
-      chartRef.current.timeScale().scrollToRealTime()
-      framePrices(chartRef.current, next)
-      painted = true
-      setNote(null)
+    const publish = () => {
+      painted = candles.length > 0
+      if (painted) setNote(null)
+      onStreamRef.current?.(candles.map(c => ({ ...c })))
     }
 
-    const upsert = (bar: Bar) => {
-      const last = bars[bars.length - 1]
-      if (last && last.time === bar.time) bars[bars.length - 1] = bar
-      else if (!last || bar.time > last.time) bars.push(bar)
-      else return
-      if (!seriesRef.current || !chartRef.current) return
-      seriesRef.current.update(bar)
-      framePrices(chartRef.current, bars)
+    const upsert = (candle: Candle) => {
+      const last = candles[candles.length - 1]
+      if (last && last.from === candle.from) candles[candles.length - 1] = candle
+      else if (!last || candle.from > last.from) candles.push(candle)
+      publish()
     }
 
     const pullHistory = async () => {
@@ -179,9 +190,8 @@ export default function LiveChart({ activeId, activeTicker }: Props) {
           if (!painted) setNote(message)
           return
         }
-        const next = payload.map(toBar).filter((bar): bar is Bar => bar !== null)
-        bars.splice(0, bars.length, ...next)
-        paint(bars)
+        candles.splice(0, candles.length, ...payload)
+        publish()
       } catch {
         if (!stopped && !painted) setNote('Não foi possível abrir o gráfico ao vivo deste ativo.')
       }
@@ -190,15 +200,14 @@ export default function LiveChart({ activeId, activeTicker }: Props) {
     const listen = () => {
       source = new EventSource(`/api/chart/stream?ticker=${encodeURIComponent(ticker)}`)
       source.addEventListener('history', (event) => {
-        const candles = JSON.parse((event as MessageEvent).data) as Candle[]
-        const next = (candles ?? []).map(toBar).filter((bar): bar is Bar => bar !== null)
-        if (!next.length) return
-        bars.splice(0, bars.length, ...next)
-        paint(bars)
+        const history = JSON.parse((event as MessageEvent).data) as Candle[]
+        if (!history?.length) return
+        candles.splice(0, candles.length, ...history)
+        publish()
       })
       source.addEventListener('candle', (event) => {
-        const bar = toBar(JSON.parse((event as MessageEvent).data) as Candle)
-        if (bar) upsert(bar)
+        const candle = JSON.parse((event as MessageEvent).data) as Candle
+        if (candle?.from) upsert(candle)
       })
       source.addEventListener('status', (event) => {
         const payload = JSON.parse((event as MessageEvent).data) as { error?: string }
@@ -222,7 +231,10 @@ export default function LiveChart({ activeId, activeTicker }: Props) {
       stopped = true
       source?.close()
     }
-  }, [activeTicker])
+  }, [activeTicker, stream])
+
+  const showNote = Boolean(note) && !(bars && bars.length)
+  const showEmpty = !stream && !(bars && bars.length) && !note
 
   return (
     <div className="chart-wrap">
@@ -231,9 +243,9 @@ export default function LiveChart({ activeId, activeTicker }: Props) {
         <span className="chart-tf">M1</span>
       </div>
       <div ref={containerRef} className="chart-container" />
-      {(!activeId || note) && (
+      {(showNote || showEmpty) && (
         <div className="chart-placeholder">
-          {note ?? 'Escolha o ativo para ver o gráfico ao vivo'}
+          {note ?? 'Configure o histórico para exibir a sessão'}
         </div>
       )}
     </div>

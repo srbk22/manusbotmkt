@@ -10,6 +10,7 @@ export interface DemoConfigInput {
   startBalance: number
   pair: string
   strategy: DemoStrategy
+  mode: 'static' | 'live'
 }
 
 interface Props {
@@ -25,6 +26,7 @@ export default function DemoConfig({ initial, onApply, onClose }: Props) {
   const [startBalance, setStartBalance] = useState(String(initial.startBalance))
   const [pair, setPair] = useState(initial.pair)
   const [strategy, setStrategy] = useState<DemoStrategy>(initial.strategy ?? 'hard')
+  const [mode, setMode] = useState<'static' | 'live'>(initial.mode ?? 'static')
   const selected = DEMO_STRATEGIES.find(s => s.id === strategy) ?? DEMO_STRATEGIES[0]
 
   useEffect(() => {
@@ -59,6 +61,7 @@ export default function DemoConfig({ initial, onApply, onClose }: Props) {
       startBalance: Number(startBalance.replace(',', '.')) || 0,
       pair,
       strategy,
+      mode,
     })
   }
 
@@ -104,6 +107,33 @@ export default function DemoConfig({ initial, onApply, onClose }: Props) {
                   onChange={e => setProfit(e.target.value)}
                 />
               </label>
+
+              <div className="bot-config-field">
+                <span className="bot-config-label">Modo</span>
+                <div className="bot-config-chips" role="radiogroup" aria-label="Modo">
+                  <button
+                    type="button"
+                    className={`bot-config-chip${mode === 'static' ? ' is-on' : ''}`}
+                    aria-pressed={mode === 'static'}
+                    onClick={() => setMode('static')}
+                  >
+                    <span className="bot-config-chip-name">Estático</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`bot-config-chip${mode === 'live' ? ' is-on' : ''}`}
+                    aria-pressed={mode === 'live'}
+                    onClick={() => setMode('live')}
+                  >
+                    <span className="bot-config-chip-name">Ao vivo</span>
+                  </button>
+                </div>
+                <p className="bot-config-hint">
+                  {mode === 'static'
+                    ? 'Gera o histórico agora e mostra a sessão inteira.'
+                    : 'Começa sem operações. Cada entrada segue a estratégia no gráfico real, e a vela do resultado fecha no lucro configurado.'}
+                </p>
+              </div>
 
               <div className="bot-config-field">
                 <span className="bot-config-label">Estratégia</span>
@@ -196,7 +226,7 @@ export default function DemoConfig({ initial, onApply, onClose }: Props) {
             onClick={apply}
             disabled={!canApply}
           >
-            Gerar histórico
+            {mode === 'static' ? 'Gerar histórico' : 'Iniciar ao vivo'}
           </button>
         </footer>
       </div>
