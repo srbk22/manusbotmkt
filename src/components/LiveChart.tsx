@@ -34,11 +34,8 @@ export default function LiveChart({ activeId, activeTicker, candles }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const seriesRef = useRef<ReturnType<ReturnType<typeof createChart>['addSeries']> | null>(null)
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null)
-
-  useEffect(() => {
-    if (candles?.length) return
-    seriesRef.current?.setData([])
-  }, [activeTicker, candles])
+  const candlesRef = useRef(candles)
+  candlesRef.current = candles
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -74,7 +71,6 @@ export default function LiveChart({ activeId, activeTicker, candles }: Props) {
       timeScale: {
         borderColor: '#1f1f1f',
         timeVisible: true,
-        // Zoom padrão mais próximo: com 6h de histórico, barSpacing evita gap à esquerda.
         barSpacing: 9,
         rightOffset: 4,
       },
@@ -93,43 +89,11 @@ export default function LiveChart({ activeId, activeTicker, candles }: Props) {
 
     chartRef.current = chart
     seriesRef.current = series
-    if (candles?.length) {
-      series.setData(toSeries(candles))
-      chart.timeScale().fitContent()
-    } else {
-      series.setData([])
+    series.setData([])
+    if (candlesRef.current?.length) {
+      series.setData(toSeries(candlesRef.current))
+      chart.timeScale().scrollToRealTime()
     }
-
-    let cancelled = false
-    const api = window.manusPro
-    if (!candles && api?.botChartSnapshot) {
-      void api.botChartSnapshot().then((snap) => {
-        if (cancelled || !seriesRef.current || !snap?.length) return
-        seriesRef.current.setData(toSeries(snap))
-        chartRef.current?.timeScale().scrollToRealTime()
-      }).catch(() => { /* sem snapshot ainda */ })
-    }
-
-    const unsubHistory = api?.on?.('bot:candles_history', (incoming: ChartCandle[]) => {
-      if (!seriesRef.current) return
-      seriesRef.current.setData(toSeries(incoming ?? []))
-      chartRef.current?.timeScale().scrollToRealTime()
-    }) ?? (() => {})
-
-    const unsubCandle = api?.on?.('bot:candle', (c: ChartCandle) => {
-      if (!seriesRef.current) return
-      seriesRef.current.update({
-        time: (c.from - new Date(c.from * 1000).getTimezoneOffset() * 60) as UTCTimestamp,
-        open: c.open,
-        high: c.max,
-        low: c.min,
-        close: c.close,
-      })
-    }) ?? (() => {})
-
-    const unsubReset = api?.on?.('bot:chart_reset', () => {
-      seriesRef.current?.setData([])
-    }) ?? (() => {})
 
     const resizeObserver = new ResizeObserver(() => {
       if (!containerRef.current || !chartRef.current) return
@@ -139,15 +103,21 @@ export default function LiveChart({ activeId, activeTicker, candles }: Props) {
     resizeObserver.observe(el)
 
     return () => {
-      cancelled = true
-      unsubHistory()
-      unsubCandle()
-      unsubReset()
       resizeObserver.disconnect()
       chart.remove()
       chartRef.current = null
       seriesRef.current = null
     }
+  }, [activeTicker])
+
+  useEffect(() => {
+    if (!seriesRef.current) return
+    if (!candles?.length) {
+      seriesRef.current.setData([])
+      return
+    }
+    seriesRef.current.setData(toSeries(candles))
+    chartRef.current?.timeScale().scrollToRealTime()
   }, [candles])
 
   return (

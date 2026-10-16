@@ -247,8 +247,9 @@ function buildCandles(
 ): DemoCandle[] {
   if (!trades.length) return []
   const chronological = [...trades].sort((a, b) => a.enteredAt - b.enteredAt)
-  const start = Math.floor(chronological[0].enteredAt / 60_000) * 60 - 40 * 60
-  const end = Math.floor(chronological[chronological.length - 1].enteredAt / 60_000) * 60 + 3 * 60
+  // Mesma janela do gráfico oficial: 6h de M1, encerrando na última entrada.
+  const end = Math.floor(chronological[chronological.length - 1].enteredAt / 60_000) * 60 + 2 * 60
+  const start = end - 6 * 60 * 60
   const byMinute = new Map<number, TradeRecord>()
   for (const t of chronological) {
     byMinute.set(Math.floor(t.enteredAt / 60_000) * 60, t)
@@ -265,16 +266,16 @@ function buildCandles(
     if (trade) {
       const up = (trade.direction === 'CALL' && trade.result === 'WIN')
         || (trade.direction === 'PUT' && trade.result === 'LOSS')
-      const body = pair.pip * (5 + rng() * 11)
+      const body = pair.pip * (1.4 + rng() * 3.2)
       delta = up ? body : -body
     } else if (want) {
-      const body = pair.pip * (4 + rng() * 8)
+      const body = pair.pip * (1.2 + rng() * 2.6)
       delta = want === 'up' ? body : -body
     } else {
-      delta = pair.pip * (rng() - 0.48) * 6
+      delta = pair.pip * (rng() - 0.5) * 2.4
     }
     const close = roundPx(open + delta, pair.pip)
-    const wick = pair.pip * (1 + rng() * 4)
+    const wick = pair.pip * (0.4 + rng() * 1.8)
     const high = roundPx(Math.max(open, close) + wick, pair.pip)
     const low = roundPx(Math.min(open, close) - wick * (0.6 + rng() * 0.8), pair.pip)
     candles.push({
