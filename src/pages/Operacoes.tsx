@@ -5,7 +5,7 @@ import ScoreBoard from '../components/ScoreBoard'
 import TradeLog from '../components/TradeLog'
 import LiveChart from '../components/LiveChart'
 import LogConsole from '../components/LogConsole'
-import { buildScene, type DemoCandle, type DemoScene } from '../lib/demo-session'
+import { buildScene, type DemoCandle, type DemoScene, type DemoStrategy } from '../lib/demo-session'
 
 const STORAGE_KEY = 'manus-marketing:scene'
 
@@ -15,6 +15,20 @@ const DEFAULT_INPUT: DemoConfigInput = {
   payout: 0.87,
   startBalance: 1000,
   pair: 'EURUSD-OTC',
+  strategy: 'hard',
+}
+
+function savedStrategy(scene: DemoScene | null): DemoStrategy {
+  if (!scene) return 'hard'
+  if (scene.strategy === 'hard' || scene.strategy === 'q5' || scene.strategy === 'alt' || scene.strategy === 'last2') {
+    return scene.strategy
+  }
+  const ids = new Set(scene.status.trades.map(t => t.strategy))
+  if (ids.size === 1) {
+    const id = [...ids][0]
+    if (id === 'hard' || id === 'q5' || id === 'alt' || id === 'last2') return id
+  }
+  return 'hard'
 }
 
 function loadScene(): DemoScene | null {
@@ -42,6 +56,7 @@ export default function Operacoes() {
         payout: saved.plan.payout,
         startBalance: saved.startBalance,
         pair: saved.pair,
+        strategy: savedStrategy(saved),
       }
     : DEFAULT_INPUT)
 

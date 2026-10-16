@@ -22,7 +22,30 @@ export const DEMO_PAIRS: DemoPair[] = [
   { ticker: 'AUDCAD-OTC', price: 0.91246, pip: 0.00008 },
 ]
 
-const STRATEGIES = ['q5', 'alt', 'last2'] as const
+export type DemoStrategy = 'hard' | 'q5' | 'alt' | 'last2'
+
+export const DEMO_STRATEGIES: { id: DemoStrategy; label: string; hint: string }[] = [
+  {
+    id: 'hard',
+    label: 'Prime',
+    hint: 'A entrada sai poucos segundos depois que o minuto vira. A próxima demora cerca de 2 minutos, às vezes 3.',
+  },
+  {
+    id: 'q5',
+    label: 'FT5',
+    hint: 'Olha as 3 primeiras velas do bloco de 5 minutos e entra na 4ª. O intervalo fica em torno de 5 a 10 minutos.',
+  },
+  {
+    id: 'alt',
+    label: 'Opostos',
+    hint: 'Espera 4 velas alternadas e entra contra a última. O intervalo fica em torno de 5 a 8 minutos.',
+  },
+  {
+    id: 'last2',
+    label: 'P2',
+    hint: 'No começo de cada bloco de 5 minutos, olha as 2 velas anteriores. O intervalo fica em torno de 5 a 10 minutos.',
+  },
+]
 
 export interface SessionPlan {
   profit: number
@@ -43,6 +66,7 @@ export interface DemoScene {
   pair: string
   startBalance: number
   seed: number
+  strategy: DemoStrategy
 }
 
 function money(n: number): number {
@@ -130,34 +154,84 @@ function profitsFor(results: Array<'WIN' | 'LOSS'>, entry: number, payout: numbe
   return profits
 }
 
-function buildTimes(n: number, rng: () => number, now: number): number[] {
-  let cursor = now - (120 + Math.floor(rng() * 360)) * 1000
-  const desc: number[] = []
-  for (let i = 0; i < n; i++) {
-    const roll = rng()
-    const gapSec = roll < 0.62
-      ? 70 + Math.floor(rng() * 90)
-      : roll < 0.88
-        ? 180 + Math.floor(rng() * 220)
-        : 480 + Math.floor(rng() * 520)
-    cursor -= gapSec * 1000
-    const d = new Date(cursor)
-    d.setSeconds(4 + Math.floor(rng() * 50))
-    d.setMilliseconds(0)
-    desc.push(d.getTime())
-  }
-  const times = desc.reverse()
-  for (let i = 1; i < times.length; i++) {
-    if (times[i] <= times[i - 1] + 50_000) {
-      times[i] = times[i - 1] + (62 + Math.floor(rng() * 48)) * 1000
+function entrySecond(rng: () => number): number {
+  return 2 + Math.floor(rng() * 3)
+}
+
+function withSeconds(minuteMs: number, second: number): number {
+  const d = new Date(minuteMs)
+  d.setSeconds(second, 0)
+  return d.getTime()
+}
+
+/** Horários da mais recente para a mais antiga, no relógio da estratégia. */
+function buildStrategyTimes(strategy: DemoStrategy, n: number, rng: () => number, now: number): number[] {
+  const newest: number[] = []
+  const safe = now - 45_000
+
+  if (strategy === 'hard') {
+    let minute = Math.floor(safe / 60_000) * 60_000
+    newest.push(withSeconds(minute, entrySecond(rng)))
+    while (newest.length < n) {
+      const skip = rng() < 0.72 ? 2 : 3
+      minute -= skip * 60_000
+      newest.push(withSeconds(minute, entrySecond(rng)))
+    }
+  } else if (strategy === 'q5') {
+    let quadrant = Math.floor(safe / 300_000) * 300_000
+    let minute = quadrant + 3 * 60_000
+    if (withSeconds(minute, 2) > safe) {
+      quadrant -= 300_000
+      minute = quadrant + 3 * 60_000
+    }
+    newest.push(withSeconds(minute, entrySecond(rng)))
+    while (newest.length < n) {
+      const roll = rng()
+      const blocks = roll < 0.25 ? 1 : roll < 0.8 ? 2 : 3
+      quadrant -= blocks * 300_000
+      newest.push(withSeconds(quadrant + 3 * 60_000, entrySecond(rng)))
+    }
+  } else if (strategy === 'last2') {
+    let quadrant = Math.floor(safe / 300_000) * 300_000
+    if (withSeconds(quadrant, 2) > safe) quadrant -= 300_000
+    newest.push(withSeconds(quadrant, entrySecond(rng)))
+    while (newest.length < n) {
+      const roll = rng()
+      const blocks = roll < 0.4 ? 1 : roll < 0.8 ? 2 : 3
+      quadrant -= blocks * 300_000
+      newest.push(withSeconds(quadrant, entrySecond(rng)))
+    }
+  } else {
+    let minute = Math.floor(safe / 60_000) * 60_000
+    newest.push(withSeconds(minute, entrySecond(rng)))
+    while (newest.length < n) {
+      const gapMin = 5 + Math.floor(rng() * 4)
+      minute -= gapMin * 60_000
+      newest.push(withSeconds(minute, entrySecond(rng)))
     }
   }
-  const last = times[times.length - 1] ?? now
-  if (last > now - 30_000) {
-    const shift = last - (now - 90_000)
-    for (let i = 0; i < times.length; i++) times[i] -= shift
+
+  return newest.reverse()
+}
+
+function signalBias(strategy: DemoStrategy, trades: TradeRecord[]): Map<number, 'up' | 'down'> {
+  const bias = new Map<number, 'up' | 'down'>()
+  if (strategy === 'hard') return bias
+  for (const trade of trades) {
+    const minute = Math.floor(trade.enteredAt / 60_000) * 60
+    if (strategy === 'q5' || strategy === 'last2') {
+      const up = trade.direction === 'PUT'
+      const offsets = strategy === 'q5' ? [180, 120, 60] : [120, 60]
+      for (const offset of offsets) bias.set(minute - offset, up ? 'up' : 'down')
+    } else {
+      const lastBull = trade.direction === 'PUT'
+      ;[240, 180, 120, 60].forEach((offset, index) => {
+        const bull = lastBull ? index % 2 === 1 : index % 2 === 0
+        bias.set(minute - offset, bull ? 'up' : 'down')
+      })
+    }
   }
-  return times
+  return bias
 }
 
 function roundPx(price: number, pip: number): number {
@@ -169,6 +243,7 @@ function buildCandles(
   trades: TradeRecord[],
   pair: DemoPair,
   rng: () => number,
+  strategy: DemoStrategy,
 ): DemoCandle[] {
   if (!trades.length) return []
   const chronological = [...trades].sort((a, b) => a.enteredAt - b.enteredAt)
@@ -179,17 +254,22 @@ function buildCandles(
     byMinute.set(Math.floor(t.enteredAt / 60_000) * 60, t)
   }
 
+  const bias = signalBias(strategy, chronological)
   let price = pair.price
   const candles: DemoCandle[] = []
   for (let t = start; t <= end; t += 60) {
     const trade = byMinute.get(t)
     const open = price
     let delta: number
+    const want = bias.get(t)
     if (trade) {
       const up = (trade.direction === 'CALL' && trade.result === 'WIN')
         || (trade.direction === 'PUT' && trade.result === 'LOSS')
       const body = pair.pip * (5 + rng() * 11)
       delta = up ? body : -body
+    } else if (want) {
+      const body = pair.pip * (4 + rng() * 8)
+      delta = want === 'up' ? body : -body
     } else {
       delta = pair.pip * (rng() - 0.48) * 6
     }
@@ -220,12 +300,15 @@ export function buildScene(input: {
   payout?: number
   startBalance: number
   pair: string
+  strategy?: DemoStrategy
   seed?: number
 }): DemoScene {
   const plan = planSession(input.profit, input.operations, input.payout ?? 0.87)
   const seed = input.seed ?? (Date.now() >>> 0)
   const rng = rngOf(seed || 1)
   const pair = DEMO_PAIRS.find(p => p.ticker === input.pair) ?? DEMO_PAIRS[0]
+  const strategy: DemoStrategy = input.strategy ?? 'hard'
+  const strategyName = DEMO_STRATEGIES.find(s => s.id === strategy)?.label ?? 'Prime'
   const startBalance = money(Math.max(0, input.startBalance))
 
   if (!plan.possible) {
@@ -252,12 +335,13 @@ export function buildScene(input: {
       pair: pair.ticker,
       startBalance,
       seed,
+      strategy,
     }
   }
 
   const results = layoutResults(plan.wins, plan.losses, rng)
   const profits = profitsFor(results, plan.entry, plan.payout, plan.profit)
-  const times = buildTimes(plan.operations, rng, Date.now())
+  const times = buildStrategyTimes(strategy, plan.operations, rng, Date.now())
   const directions: Array<'CALL' | 'PUT'> = []
   let same = 0
   let last: 'CALL' | 'PUT' | null = null
@@ -272,7 +356,7 @@ export function buildScene(input: {
 
   const chronological: TradeRecord[] = results.map((result, i) => ({
     id: `mkt-${seed}-${i}`,
-    strategy: STRATEGIES[Math.floor(rng() * STRATEGIES.length)],
+    strategy,
     direction: directions[i],
     amount: plan.entry,
     enteredAt: times[i],
@@ -284,11 +368,11 @@ export function buildScene(input: {
   const losses = chronological.length - wins
   const totalPnl = money(chronological.reduce((a, t) => a + t.profit, 0))
   const balance = money(startBalance + totalPnl)
-  const candles = buildCandles(chronological, pair, rng)
+  const candles = buildCandles(chronological, pair, rng, strategy)
 
   const logs: string[] = ['[SISTEMA] Bot iniciado']
   for (const t of chronological) {
-    const name = t.strategy === 'q5' ? 'FT5' : t.strategy === 'alt' ? 'Opostos' : 'P2'
+    const name = strategyName
     logs.push(`[ENTRADA] ${name} → ${t.direction} ${moneyLabel(t.amount)}`)
     logs.push(`[${t.result}] ${name} ${t.direction} ${t.profit >= 0 ? '+' : ''}${moneyLabel(t.profit)}`)
   }
@@ -318,5 +402,6 @@ export function buildScene(input: {
     pair: pair.ticker,
     startBalance,
     seed,
+    strategy,
   }
 }

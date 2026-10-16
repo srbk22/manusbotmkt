@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatCurrency } from '../lib/currency'
-import { DEMO_PAIRS, planSession } from '../lib/demo-session'
+import { DEMO_PAIRS, DEMO_STRATEGIES, planSession, type DemoStrategy } from '../lib/demo-session'
 
 export interface DemoConfigInput {
   profit: number
@@ -9,6 +9,7 @@ export interface DemoConfigInput {
   payout: number
   startBalance: number
   pair: string
+  strategy: DemoStrategy
 }
 
 interface Props {
@@ -23,6 +24,8 @@ export default function DemoConfig({ initial, onApply, onClose }: Props) {
   const [payout, setPayout] = useState(String(Math.round(initial.payout * 100)))
   const [startBalance, setStartBalance] = useState(String(initial.startBalance))
   const [pair, setPair] = useState(initial.pair)
+  const [strategy, setStrategy] = useState<DemoStrategy>(initial.strategy ?? 'hard')
+  const selected = DEMO_STRATEGIES.find(s => s.id === strategy) ?? DEMO_STRATEGIES[0]
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -55,6 +58,7 @@ export default function DemoConfig({ initial, onApply, onClose }: Props) {
       payout: plan.payout,
       startBalance: Number(startBalance.replace(',', '.')) || 0,
       pair,
+      strategy,
     })
   }
 
@@ -100,6 +104,24 @@ export default function DemoConfig({ initial, onApply, onClose }: Props) {
                   onChange={e => setProfit(e.target.value)}
                 />
               </label>
+
+              <div className="bot-config-field">
+                <span className="bot-config-label">Estratégia</span>
+                <div className="bot-config-chips" role="radiogroup" aria-label="Estratégia">
+                  {DEMO_STRATEGIES.map(s => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={`bot-config-chip${strategy === s.id ? ' is-on' : ''}`}
+                      aria-pressed={strategy === s.id}
+                      onClick={() => setStrategy(s.id)}
+                    >
+                      <span className="bot-config-chip-name">{s.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="bot-config-hint">{selected.hint}</p>
+              </div>
 
               <label className="bot-config-field bot-config-field--compact">
                 <span className="bot-config-label">Operações</span>
