@@ -35,7 +35,6 @@ export default function Operacoes() {
   const [candles, setCandles] = useState<DemoCandle[]>(saved?.candles ?? [])
   const [balance, setBalance] = useState(saved?.balance ?? 0)
   const [configOpen, setConfigOpen] = useState(false)
-  const [opsPane, setOpsPane] = useState<'chart' | 'panel'>('chart')
   const [form, setForm] = useState<DemoConfigInput>(saved
     ? {
         profit: saved.plan.profit,
@@ -67,7 +66,6 @@ export default function Operacoes() {
     setCandles(next.candles)
     setBalance(next.balance)
     setConfigOpen(false)
-    setOpsPane('chart')
   }
 
   function handleStop() {
@@ -116,34 +114,7 @@ export default function Operacoes() {
         )}
       </div>
 
-      <div className="operacoes-mobile-tabs" role="tablist" aria-label="Painéis" data-pane={opsPane}>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={opsPane === 'chart'}
-          className={opsPane === 'chart' ? 'active' : ''}
-          onClick={() => setOpsPane('chart')}
-        >
-          <svg viewBox="0 0 16 16" aria-hidden>
-            <path d="M2 12V8h2v4H2zm5 0V4h2v8H7zm5 0V6h2v6h-2z" fill="currentColor" />
-          </svg>
-          Gráfico
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={opsPane === 'panel'}
-          className={opsPane === 'panel' ? 'active' : ''}
-          onClick={() => setOpsPane('panel')}
-        >
-          <svg viewBox="0 0 16 16" aria-hidden>
-            <path d="M2 2h5v5H2V2zm7 0h5v5H9V2zM2 9h5v5H2V9zm7 0h5v5H9V9z" fill="currentColor" />
-          </svg>
-          Painel
-        </button>
-      </div>
-
-      <div className={`operacoes-body operacoes-body--${opsPane}`}>
+      <div className="operacoes-body">
         <div className="operacoes-left">
           <LiveChart
             activeId={status?.activeId}

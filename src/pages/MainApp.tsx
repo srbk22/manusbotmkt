@@ -178,6 +178,7 @@ export default function MainApp({ onLogout }: Props) {
                     isCta ? 'sidebar-nav-btn--operacoes' : '',
                     active ? 'active' : '',
                   ].filter(Boolean).join(' ')}
+                  aria-current={active ? 'page' : undefined}
                   onClick={() => setTab(id)}
                 >
                   <span className="sidebar-nav-iconWrap">

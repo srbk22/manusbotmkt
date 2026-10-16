@@ -6427,11 +6427,8 @@ select:focus,
   }
 }
 
-/* ═══ Mobile — mesmo esquema do claudebot (≤860px) ═══ */
-.members-topbar,
-.operacoes-mobile-tabs {
-  display: none;
-}
+/* ═══ Mobile — menu inferior, como app (≤860px) ═══ */
+.members-topbar { display: none; }
 
 @media (max-width: 860px) {
   html, body, #root, .app-root {
@@ -6452,7 +6449,6 @@ select:focus,
   .members-shell--compact {
     display: flex;
     flex-direction: column;
-    width: 100%;
     height: 100%;
     min-height: 0;
     overflow: hidden;
@@ -6464,24 +6460,21 @@ select:focus,
     justify-content: space-between;
     gap: 8px;
     flex-shrink: 0;
+    order: 1;
+    min-height: 56px;
     padding:
       max(8px, env(safe-area-inset-top, 0px))
-      max(10px, env(safe-area-inset-right, 0px))
+      max(12px, env(safe-area-inset-right, 0px))
       8px
       max(12px, env(safe-area-inset-left, 0px));
     background: #050505;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    z-index: 6;
   }
 
   .members-topbar-actions {
     display: flex;
     align-items: center;
-    gap: 4px;
-  }
-
-  .members-topbar .sidebar-brand-text {
-    display: flex;
+    gap: 6px;
   }
 
   .members-topbar .sidebar-logo-mark {
@@ -6490,62 +6483,122 @@ select:focus,
   }
 
   .members-topbar .sidebar-notify-slot,
-  .members-topbar .sidebar-icon-btn {
-    width: 42px;
-    height: 42px;
-    min-height: 42px;
+  .members-topbar .sidebar-icon-btn,
+  .members-topbar .notif-trigger {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .members-shell--compact .members-main {
     order: 2;
     flex: 1 1 auto;
-    min-height: 0;
     min-width: 0;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
+  }
+
+  .members-shell--compact .mainapp-body,
+  .members-shell--compact .operacoes,
+  .members-shell--compact .page-content,
+  .members-shell--compact .page-content.aulas-page {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
   }
 
   .members-shell--compact .members-sidebar--bottom {
     order: 3;
+    width: 100%;
+    height: auto;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: #050505;
     padding: 0;
   }
 
   .members-shell--compact .members-sidebar-pill--bottom {
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: stretch;
+    width: 100%;
+    max-width: none;
     height: auto;
     min-height: 0;
+    align-self: stretch;
     padding: 4px 6px max(8px, env(safe-area-inset-bottom, 0px));
     gap: 0;
-    justify-content: stretch;
+    border-radius: 0;
+    border: none;
+    border-top: 1px solid rgba(255, 90, 31, 0.35);
+    box-shadow: none;
+    overflow: visible;
   }
 
-  .members-shell--compact .sidebar-zone--nav {
-    width: 100%;
+  .members-shell--compact .members-sidebar-pill--bottom .sidebar-zone--nav {
+    flex-direction: row;
+    align-items: stretch;
     justify-content: space-around;
+    width: 100%;
     gap: 0;
+    padding: 0;
   }
 
-  .members-shell--compact .sidebar-nav-btn {
+  .members-shell--compact .members-sidebar-pill--bottom .sidebar-nav-btn {
     flex: 1 1 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    height: auto;
     min-width: 0;
     min-height: 52px;
-    height: auto;
     padding: 6px 4px;
     gap: 4px;
-    flex-direction: column;
+  }
+
+  .members-shell--compact .members-sidebar-pill--bottom .sidebar-nav-btn:focus-visible {
+    outline: 2px solid var(--orange);
+    outline-offset: -2px;
   }
 
   .members-shell--compact .members-sidebar-pill--bottom .sidebar-nav-label {
     display: block;
-    font-size: 10px;
-    letter-spacing: 0.04em;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1.15;
     max-width: 100%;
+    text-align: center;
     white-space: nowrap;
   }
 
-  .page-content {
-    padding: 16px 14px 18px;
+  .members-shell--compact .members-sidebar-pill--bottom .sidebar-nav-iconWrap,
+  .members-shell--compact .members-sidebar-pill--bottom .sidebar-nav-btn--operacoes .sidebar-nav-iconWrap {
+    width: 22px;
+    height: 22px;
   }
 
-  img, video, iframe {
-    max-width: 100%;
+  .members-shell--compact .members-sidebar-pill--bottom .sidebar-nav-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .members-shell--compact .members-sidebar-pill--bottom .sidebar-nav-btn.active::after {
+    left: 16px;
+    right: 16px;
+    top: 0;
+    bottom: auto;
+    width: auto;
+    height: 2px;
+  }
+
+  .page-content {
+    padding: 16px 14px 20px;
   }
 
   .login-page,
@@ -6555,19 +6608,57 @@ select:focus,
       16px
       max(16px, env(safe-area-inset-bottom, 0px));
     overflow: auto;
-    -webkit-overflow-scrolling: touch;
   }
 
   .login-card,
   .lic-gate-card {
-    max-width: 100%;
     width: 100%;
+    max-width: 100%;
   }
 
   .operacoes-bar {
     flex-wrap: wrap;
     height: auto;
+    min-height: 50px;
     row-gap: 8px;
+  }
+
+  .operacoes-body {
+    flex-direction: column;
+    flex: none;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .operacoes-left,
+  .operacoes-body .operacoes-panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    border-right: none;
+    flex: none;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .operacoes-left {
+    min-height: 0;
+  }
+
+  .chart-wrap {
+    flex: none;
+    height: 46vh;
+    min-height: 240px;
+  }
+
+  .members-shell--compact .tradelog,
+  .members-shell--compact .tradelog-body {
+    overflow: visible;
+    height: auto;
+    max-height: none;
+    flex: none;
   }
 
   .btn-start,
@@ -6576,34 +6667,17 @@ select:focus,
     min-height: 44px;
   }
 
-  .operacoes-body {
-    overflow: auto;
-    -webkit-overflow-scrolling: touch;
-    flex-direction: column;
-  }
-
-  .operacoes-left,
-  .operacoes-panel {
-    width: 100%;
-    max-width: 100%;
-    border-right: none;
-  }
-
-  .chart-wrap {
-    min-height: 220px;
-  }
-
   .modal-overlay {
     align-items: flex-end;
     padding: 0;
   }
 
-  .modal-card {
+  .modal-card,
+  .bot-config-sheet {
     width: 100%;
     max-width: 100%;
     max-height: min(92dvh, 100%);
     border-radius: 18px 18px 0 0;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   .strategy-grid,
@@ -6613,87 +6687,9 @@ select:focus,
   }
 
   .notif-panel {
-    width: min(400px, calc(100vw - 24px)) !important;
-    max-height: min(70dvh, calc(100dvh - 96px));
-  }
-}
-
-@media (max-width: 640px) {
-  .operacoes-mobile-tabs {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    position: relative;
-    flex-shrink: 0;
-    margin: 8px 12px 6px;
-    padding: 4px;
-    isolation: isolate;
-    border-radius: 14px;
-    background: #0c0c0c;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    width: min(360px, calc(100vw - 24px)) !important;
+    max-height: min(70dvh, calc(100dvh - 80px));
   }
 
-  .operacoes-mobile-tabs::before {
-    content: '';
-    position: absolute;
-    z-index: 0;
-    top: 4px;
-    left: 4px;
-    width: calc(50% - 4px);
-    height: calc(100% - 8px);
-    border-radius: 10px;
-    background: rgba(255, 90, 31, 0.22);
-    box-shadow: inset 0 0 0 1px rgba(255, 90, 31, 0.45);
-    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-    pointer-events: none;
-  }
-
-  .operacoes-mobile-tabs[data-pane='panel']::before {
-    transform: translateX(calc(100% + 4px));
-  }
-
-  .operacoes-mobile-tabs button {
-    position: relative;
-    z-index: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    min-height: 42px;
-    border: none;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.5);
-    font-family: var(--font-display);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    cursor: pointer;
-  }
-
-  .operacoes-mobile-tabs button svg {
-    width: 14px;
-    height: 14px;
-  }
-
-  .operacoes-mobile-tabs button.active {
-    color: #fff;
-  }
-
-  .operacoes-body {
-    overflow: hidden;
-  }
-
-  .operacoes-body--chart .operacoes-panel,
-  .operacoes-body--panel .operacoes-left {
-    display: none;
-  }
-
-  .operacoes-body--chart .operacoes-left,
-  .operacoes-body--panel .operacoes-panel {
-    flex: 1 1 auto;
-    min-height: 0;
-    max-height: none;
-    width: 100%;
-    border: none;
-  }
+  img, video, iframe { max-width: 100%; }
 }
