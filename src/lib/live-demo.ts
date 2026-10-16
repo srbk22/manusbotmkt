@@ -6,197 +6,253 @@ export interface PlannedTrade {
   profit: number
 }
 
+export interface LivePhase {
+  kind: 'scan' | 'found' | 'entry' | 'idle'
+  text: string
+}
+
 export interface LiveStep {
   trades: TradeRecord[]
   logs: string[]
   done: boolean
-  adaptations: DemoCandle[]
+  candles: DemoCandle[]
+  phase: LivePhase
 }
 
-interface OpenTrade {
+interface Slot {
+  at: number
+  settleAt: number
   from: number
   direction: 'CALL' | 'PUT'
   result: 'WIN' | 'LOSS'
   profit: number
   amount: number
+  found: boolean
+  entered: boolean
+  settled: boolean
 }
 
 /**
- * Segue o relógio da estratégia oficial em cima das velas reais.
- * A direção sai do gatilho. A cor da vela de resultado segue o plano da sessão.
+ * Sessão visual. Não envia ordem e não usa a conta de ninguém.
+ * O relógio segue a estratégia da versão oficial. A vela da entrada
+ * fecha no lado do resultado planejado.
  */
 export function createLiveSession(input: {
   strategy: DemoStrategy
   label: string
+  ticker: string
+  price: number
+  pip: number
   entry: number
   seed: number
   results: PlannedTrade[]
 }) {
-  const raw = new Map<number, DemoCandle>()
-  const adaptations = new Map<number, DemoCandle>()
+  const rng = rngOf(input.seed || 1)
+  const slots = schedule(input, rng)
+  const logs: string[] = [
+    '✅ Monitorando ao vivo — identificando oportunidade',
+    '🟢 Bot iniciado',
+  ]
   const trades: TradeRecord[] = []
-  const logs: string[] = ['[SISTEMA] Aguardando o gatilho no gráfico ao vivo']
-  let open: OpenTrade | null = null
-  let index = 0
-  let cooldownUntil = 0
-  let lastEntryMs = 0
-  let seenPrime = new Set<number>()
-  let quadrantUsed = -1
-  let loggedWait = false
+  const synthetic = new Map<number, DemoCandle>()
+  let seeded = false
 
-  function rng() {
-    input.seed = (input.seed + 0x6d2b79f5) | 0
-    let t = Math.imul(input.seed ^ (input.seed >>> 15), 1 | input.seed)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-
-  function candleAt(from: number): DemoCandle | null {
-    return raw.get(from) ?? null
-  }
-
-  function takePlan(): PlannedTrade | null {
-    if (index >= input.results.length) return null
-    const next = input.results[index]
-    index += 1
-    return next
-  }
-
-  function enter(from: number, direction: 'CALL' | 'PUT', now: number) {
-    const plan = takePlan()
-    if (!plan) return
-    open = { from, direction, result: plan.result, profit: plan.profit, amount: input.entry }
-    lastEntryMs = now
-    const current = candleAt(from)
-    if (current) adaptations.set(from, adaptCandle(current, direction, plan.result))
-    logs.unshift(`[ENTRADA] ${input.label} → ${direction === 'CALL' ? 'COMPRA' : 'VENDA'}`)
-  }
-
-  function settle(now: number) {
-    if (!open) return
-    const trade: TradeRecord = {
-      id: `live-${open.from}`,
-      strategy: input.strategy,
-      direction: open.direction,
-      amount: open.amount,
-      enteredAt: open.from * 1000 + 2_000,
-      result: open.result,
-      profit: open.profit,
-    }
-    trades.unshift(trade)
-    const sign = open.profit >= 0 ? '+' : ''
-    logs.unshift(`[${open.result}] ${input.label} ${open.direction === 'CALL' ? 'COMPRA' : 'VENDA'} ${sign}${moneyLabel(open.profit)}`)
-    open = null
-    const extra = 25_000 + rng() * 45_000
-    cooldownUntil = now + extra
-    if (index >= input.results.length) {
-      logs.unshift('[SISTEMA] Sessão encerrada no lucro configurado')
-    }
-  }
-
-  function considerPrime(now: number) {
-    if (open || index >= input.results.length) return
-    const minute = Math.floor(now / 60_000) * 60
-    const age = now - minute * 1000
-    if (seenPrime.has(minute)) return
-    if (now < cooldownUntil) return
-    if (age < 1_800 || age > 4_200) {
-      if (!loggedWait && age < 1_800) {
-        loggedWait = true
-        logs.unshift(`[SISTEMA] ${input.label}: próxima entrada nesta vela`)
+  function tick(now: number, market: DemoCandle[]): LiveStep {
+    const base = market.length ? market : ensureSynthetic(now)
+    for (const slot of slots) {
+      if (!slot.found && now >= slot.at - 4_000 && !slot.entered) {
+        slot.found = true
+        logs.unshift(`✨ Oportunidade identificada · ${input.label} · ${side(slot.direction)}`)
       }
-      return
+      if (!slot.entered && now >= slot.at) {
+        slot.entered = true
+        trades.unshift({
+          id: `live-${slot.from}`,
+          strategy: input.strategy,
+          direction: slot.direction,
+          amount: slot.amount,
+          enteredAt: slot.at,
+          result: 'PENDING',
+          profit: 0,
+        })
+        logs.unshift(`📍 ${input.label}: ${slot.direction} | ${input.ticker} | ${slot.amount.toFixed(2)} BRL`)
+      }
+      if (slot.entered && !slot.settled && now >= slot.settleAt) {
+        slot.settled = true
+        const trade = trades.find(t => t.id === `live-${slot.from}`)
+        if (trade) {
+          trade.result = slot.result
+          trade.profit = slot.profit
+        }
+        const sign = slot.profit >= 0 ? '+' : ''
+        logs.unshift(`${slot.result === 'WIN' ? '✅ WIN' : '❌ LOSS'} | ${input.label} | ${slot.direction} | ${sign}${slot.profit.toFixed(2)}`)
+        if (slots.every(s => s.settled)) logs.unshift('[SISTEMA] Sessão encerrada no lucro configurado')
+        else logs.unshift('✅ Monitorando ao vivo — identificando oportunidade')
+      }
     }
-    seenPrime.add(minute)
-    loggedWait = false
-    enter(minute, rng() < 0.5 ? 'CALL' : 'PUT', now)
+
+    const candles = base.map(c => {
+      const slot = slots.find(s => s.entered && s.from === c.from)
+      if (!slot) return c
+      return paintResult(c, slot, now)
+    })
+
+    const active = slots.find(s => s.entered && !s.settled)
+    if (active && !candles.some(c => c.from === active.from)) {
+      const open = base[base.length - 1]?.close ?? input.price
+      candles.push(paintResult({
+        from: active.from,
+        open,
+        close: open,
+        min: open,
+        max: open,
+      }, active, now))
+    }
+
+    return {
+      trades: trades.map(t => ({ ...t })),
+      logs: logs.slice(0, 200),
+      done: slots.every(s => s.settled),
+      candles: candles.sort((a, b) => a.from - b.from),
+      phase: currentPhase(slots, now, input.label),
+    }
   }
 
-  function considerPattern(candle: DemoCandle, now: number) {
-    if (open || index >= input.results.length) return
-    if (now - lastEntryMs < 55_000) return
-    const T = candle.from
-    const qS = Math.floor(T / 300) * 300
-    const pos = Math.floor((T - qS) / 60)
-
-    if (input.strategy === 'q5' && pos === 3 && quadrantUsed !== qS) {
-      const c0 = candleAt(qS)
-      const c1 = candleAt(qS + 60)
-      const c2 = candleAt(qS + 120)
-      if (!c0 || !c1 || !c2) return
-      const bulls = [c0, c1, c2].every(isBull)
-      const bears = [c0, c1, c2].every(isBear)
-      if (!bulls && !bears) return
-      quadrantUsed = qS
-      enter(T, bulls ? 'PUT' : 'CALL', now)
-      return
+  function ensureSynthetic(now: number): DemoCandle[] {
+    const minute = Math.floor(now / 1000 / 60) * 60
+    if (!seeded) {
+      let price = input.price
+      for (let i = 90; i >= 1; i--) {
+        const from = minute - i * 60
+        const open = price
+        const delta = (rng() - 0.48) * input.pip * 8
+        const close = open + delta
+        synthetic.set(from, {
+          from,
+          open,
+          close,
+          min: Math.min(open, close) - input.pip,
+          max: Math.max(open, close) + input.pip,
+        })
+        price = close
+      }
+      seeded = true
     }
-
-    if (input.strategy === 'alt' && quadrantUsed !== qS) {
-      const c4 = candleAt(T - 240)
-      const c3 = candleAt(T - 180)
-      const c2 = candleAt(T - 120)
-      const c1 = candleAt(T - 60)
-      if (!c4 || !c3 || !c2 || !c1) return
-      const alt =
-        (isBull(c4) && isBear(c3) && isBull(c2) && isBear(c1))
-        || (isBear(c4) && isBull(c3) && isBear(c2) && isBull(c1))
-      if (!alt) return
-      quadrantUsed = qS
-      enter(T, isBull(c1) ? 'PUT' : 'CALL', now)
-      return
-    }
-
-    if (input.strategy === 'last2' && pos === 0 && quadrantUsed !== qS) {
-      const c1 = candleAt(T - 120)
-      const c2 = candleAt(T - 60)
-      if (!c1 || !c2) return
-      const bulls = isBull(c1) && isBull(c2)
-      const bears = isBear(c1) && isBear(c2)
-      if (!bulls && !bears) return
-      quadrantUsed = qS
-      enter(T, bulls ? 'PUT' : 'CALL', now)
-    }
+    const prev = synthetic.get(minute - 60)
+    const open = prev?.close ?? input.price
+    const current = synthetic.get(minute)
+    const drift = (rng() - 0.5) * input.pip * 2
+    const close = (current?.close ?? open) + drift
+    synthetic.set(minute, {
+      from: minute,
+      open: current?.open ?? open,
+      close,
+      min: Math.min(current?.min ?? open, close),
+      max: Math.max(current?.max ?? open, close),
+    })
+    return [...synthetic.values()].sort((a, b) => a.from - b.from)
   }
 
-  return {
-    ingest(candles: DemoCandle[], now = Date.now()): LiveStep {
-      const ordered = [...candles].sort((a, b) => a.from - b.from)
-      for (const candle of ordered) raw.set(candle.from, candle)
-
-      if (open && ordered.some(c => c.from >= open!.from + 60)) settle(now)
-
-      const latest = ordered[ordered.length - 1]
-      if (latest && index < input.results.length) {
-        if (input.strategy === 'hard') considerPrime(now)
-        else considerPattern(latest, now)
-      }
-
-      if (open) {
-        const current = candleAt(open.from)
-        if (current) adaptations.set(open.from, adaptCandle(current, open.direction, open.result))
-      }
-
-      return {
-        trades: [...trades],
-        logs: logs.slice(0, 200),
-        done: index >= input.results.length && !open,
-        adaptations: [...adaptations.values()],
-      }
-    },
-  }
+  return { tick }
 }
 
-export function adaptCandle(
-  candle: DemoCandle,
-  direction: 'CALL' | 'PUT',
-  result: 'WIN' | 'LOSS',
-): DemoCandle {
-  const realWin = direction === 'CALL' ? candle.close >= candle.open : candle.close < candle.open
-  if (realWin === (result === 'WIN') && candle.close !== candle.open) return candle
-  const body = Math.max(Math.abs(candle.close - candle.open), Math.abs(candle.open) * 0.00004)
-  const wantDown = (direction === 'PUT') === (result === 'WIN')
-  const close = wantDown ? candle.open - body : candle.open + body
+function schedule(input: {
+  strategy: DemoStrategy
+  entry: number
+  results: PlannedTrade[]
+}, rng: () => number): Slot[] {
+  const now = Date.now()
+  const times = entryTimes(input.strategy, input.results.length, now, rng)
+  return times.map((at, i) => {
+    const from = Math.floor(at / 60_000) * 60
+    return {
+      at,
+      settleAt: from * 1000 + 60_000,
+      from,
+      direction: rng() < 0.5 ? 'CALL' : 'PUT',
+      result: input.results[i].result,
+      profit: input.results[i].profit,
+      amount: input.entry,
+      found: false,
+      entered: false,
+      settled: false,
+    }
+  })
+}
+
+function entryTimes(strategy: DemoStrategy, n: number, now: number, rng: () => number): number[] {
+  const times: number[] = []
+  let minute = Math.floor(now / 60_000) * 60_000
+
+  if (strategy === 'hard') {
+    let at = minute + 2_000
+    if (at < now + 12_000) {
+      minute += 60_000
+      at = minute + 2_000
+    }
+    times.push(at)
+    while (times.length < n) {
+      minute += (rng() < 0.72 ? 2 : 3) * 60_000
+      times.push(minute + 2_000 + Math.floor(rng() * 2_000))
+    }
+    return times
+  }
+
+  if (strategy === 'q5') {
+    const pos = Math.floor((minute / 1000) % 300 / 60)
+    let delta = (3 - pos + 5) % 5
+    if (minute + delta * 60_000 + 2_000 < now + 12_000) delta += 5
+    minute += delta * 60_000
+    times.push(minute + 2_000)
+    while (times.length < n) {
+      const blocks = rng() < 0.55 ? 2 : rng() < 0.85 ? 1 : 3
+      minute += blocks * 5 * 60_000
+      times.push(minute + 2_000)
+    }
+    return times
+  }
+
+  if (strategy === 'last2') {
+    const pos = Math.floor((minute / 1000) % 300 / 60)
+    let delta = (5 - pos) % 5
+    if (minute + delta * 60_000 + 2_000 < now + 12_000) delta += 5
+    minute += delta * 60_000
+    times.push(minute + 2_000)
+    while (times.length < n) {
+      minute += (1 + Math.floor(rng() * 3)) * 5 * 60_000
+      times.push(minute + 2_000)
+    }
+    return times
+  }
+
+  let at = now + 12_000 + Math.floor(rng() * 8_000)
+  times.push(at)
+  while (times.length < n) {
+    at += (5 + Math.floor(rng() * 4)) * 60_000
+    times.push(at)
+  }
+  return times
+}
+
+function currentPhase(slots: Slot[], now: number, label: string): LivePhase {
+  if (slots.every(s => s.settled)) return { kind: 'idle', text: 'Sessão encerrada' }
+  const open = slots.find(s => s.entered && !s.settled)
+  if (open) return { kind: 'entry', text: `Entrada · ${label} · ${side(open.direction)}` }
+  const next = slots.find(s => !s.entered)
+  if (!next) return { kind: 'idle', text: 'Sessão encerrada' }
+  if (now >= next.at - 4_000) {
+    return { kind: 'found', text: `Oportunidade identificada · ${side(next.direction)}` }
+  }
+  const sec = Math.max(1, Math.ceil((next.at - now) / 1000))
+  return { kind: 'scan', text: `Identificando oportunidade · ${label} · ${sec}s` }
+}
+
+function paintResult(candle: DemoCandle, slot: Slot, now: number): DemoCandle {
+  const span = Math.max(1_000, slot.settleAt - slot.at)
+  const progress = Math.min(1, Math.max(0.15, (now - slot.at) / span))
+  const body = Math.max(Math.abs(candle.open) * 0.00012, Math.abs(candle.close - candle.open)) * (0.45 + progress)
+  const down = (slot.direction === 'PUT') === (slot.result === 'WIN')
+  const close = down ? candle.open - body : candle.open + body
   return {
     from: candle.from,
     open: candle.open,
@@ -206,21 +262,16 @@ export function adaptCandle(
   }
 }
 
-export function mergeCandles(raw: DemoCandle[], adaptations: DemoCandle[]): DemoCandle[] {
-  const patch = new Map(adaptations.map(c => [c.from, c]))
-  return raw.map(c => patch.get(c.from) ?? c)
+function side(direction: 'CALL' | 'PUT'): string {
+  return direction === 'CALL' ? 'COMPRA' : 'VENDA'
 }
 
-function isBull(c: DemoCandle): boolean {
-  return c.close > c.open
+function rngOf(seed: number): () => number {
+  let s = seed >>> 0
+  return () => {
+    s = (s + 0x6d2b79f5) | 0
+    let t = Math.imul(s ^ (s >>> 15), 1 | s)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
 }
-
-function isBear(c: DemoCandle): boolean {
-  return c.close < c.open
-}
-
-function moneyLabel(n: number): string {
-  const abs = Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  return `${n < 0 ? '-' : ''}R$ ${abs}`
-}
-

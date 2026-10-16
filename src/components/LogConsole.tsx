@@ -4,6 +4,7 @@ const STORAGE_KEY = 'manuspro_log_open'
 
 interface Props {
   logs: string[]
+  forceOpen?: boolean
 }
 
 function readStoredOpen(): boolean {
@@ -14,10 +15,14 @@ function readStoredOpen(): boolean {
   }
 }
 
-export default function LogConsole({ logs }: Props) {
+export default function LogConsole({ logs, forceOpen }: Props) {
   const [open, setOpen] = useState(readStoredOpen)
   const bottomRef = useRef<HTMLDivElement>(null)
   const prevCountRef = useRef(logs.length)
+
+  useEffect(() => {
+    if (forceOpen) setOpen(true)
+  }, [forceOpen])
 
   useEffect(() => {
     if (!open) return

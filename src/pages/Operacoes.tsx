@@ -5,8 +5,8 @@ import ScoreBoard from '../components/ScoreBoard'
 import TradeLog from '../components/TradeLog'
 import LiveChart from '../components/LiveChart'
 import LogConsole from '../components/LogConsole'
-import { buildScene, DEMO_STRATEGIES, layoutResults, planSession, profitsFor, type DemoCandle, type DemoScene, type DemoStrategy } from '../lib/demo-session'
-import { createLiveSession, mergeCandles } from '../lib/live-demo'
+import { buildScene, DEMO_PAIRS, DEMO_STRATEGIES, layoutResults, planSession, profitsFor, type DemoCandle, type DemoScene, type DemoStrategy } from '../lib/demo-session'
+import { createLiveSession, type LivePhase } from '../lib/live-demo'
 
 const STORAGE_KEY = 'manus-marketing:scene'
 
@@ -62,9 +62,9 @@ export default function Operacoes() {
   const [balance, setBalance] = useState(saved?.balance ?? 0)
   const [configOpen, setConfigOpen] = useState(false)
   const [liveBars, setLiveBars] = useState<DemoCandle[]>([])
+  const [phase, setPhase] = useState<LivePhase | null>(null)
   const liveRef = useRef<ReturnType<typeof createLiveSession> | null>(null)
   const rawRef = useRef<DemoCandle[]>([])
-  const adaptRef = useRef<DemoCandle[]>([])
   const runningRef = useRef(false)
   const [form, setForm] = useState<DemoConfigInput>(saved
     ? {
@@ -96,49 +96,43 @@ export default function Operacoes() {
     if (form.mode !== 'live' || !status?.running) return
     const id = window.setInterval(() => {
       const session = liveRef.current
-      const raw = rawRef.current
-      if (!session || !runningRef.current || raw.length === 0) return
-      applyLive(session.ingest(raw), raw)
-    }, 500)
-    return () => window.clearInterval(id)
-  }, [form.mode, status?.running])
-
-  function applyLive(step: ReturnType<ReturnType<typeof createLiveSession>['ingest']>, raw: DemoCandle[]) {
-    adaptRef.current = step.adaptations
-    setLiveBars(mergeCandles(raw, step.adaptations))
-    setLogs(step.logs)
-    setStatus(prev => {
-      if (!prev) return prev
-      const wins = step.trades.filter(t => t.result === 'WIN').length
-      const losses = step.trades.filter(t => t.result === 'LOSS').length
-      const totalPnl = Math.round(step.trades.reduce((sum, t) => sum + t.profit, 0) * 100) / 100
-      const balanceCurrent = Math.round((prev.balanceStart + totalPnl) * 100) / 100
-      return {
-        ...prev,
-        running: step.done ? false : prev.running,
-        totalPnl,
-        balanceCurrent,
-        wins,
-        losses,
-        winRate: step.trades.length ? Math.round((wins / step.trades.length) * 100) : 0,
-        trades: step.trades,
+      if (!session || !runningRef.current) return
+      const step = session.tick(Date.now(), rawRef.current)
+      setLiveBars(step.candles)
+      setPhase(step.phase)
+      setLogs(step.logs)
+      setStatus(prev => {
+        if (!prev) return prev
+        const closed = step.trades.filter(t => t.result !== 'PENDING')
+        const wins = closed.filter(t => t.result === 'WIN').length
+        const losses = closed.filter(t => t.result === 'LOSS').length
+        const totalPnl = Math.round(closed.reduce((sum, t) => sum + t.profit, 0) * 100) / 100
+        return {
+          ...prev,
+          running: step.done ? false : prev.running,
+          totalPnl,
+          balanceCurrent: Math.round((prev.balanceStart + totalPnl) * 100) / 100,
+          wins,
+          losses,
+          winRate: closed.length ? Math.round((wins / closed.length) * 100) : 0,
+          trades: step.trades,
+        }
+      })
+      setBalance(prev => {
+        const start = status?.balanceStart ?? prev
+        const pnl = step.trades.filter(t => t.result !== 'PENDING').reduce((sum, t) => sum + t.profit, 0)
+        return Math.round((start + pnl) * 100) / 100
+      })
+      if (step.done) {
+        liveRef.current = null
+        setPhase({ kind: 'idle', text: 'Sessão encerrada' })
       }
-    })
-    setBalance(prev => {
-      const start = status?.balanceStart ?? prev
-      return Math.round((start + step.trades.reduce((sum, t) => sum + t.profit, 0)) * 100) / 100
-    })
-    if (step.done) liveRef.current = null
-  }
+    }, 300)
+    return () => window.clearInterval(id)
+  }, [form.mode, status?.running, status?.balanceStart])
 
   function onStream(candles: DemoCandle[]) {
     rawRef.current = candles
-    const session = liveRef.current
-    if (!session || !runningRef.current) {
-      setLiveBars(mergeCandles(candles, adaptRef.current))
-      return
-    }
-    applyLive(session.ingest(candles), candles)
   }
 
   function applyConfig(input: DemoConfigInput) {
@@ -150,16 +144,20 @@ export default function Operacoes() {
       if (!plan.possible) return
       const results = layoutResults(plan.wins, plan.losses, rngOf(seed || 1))
       const profits = profitsFor(results, plan.entry, plan.payout, plan.profit)
+      const pair = DEMO_PAIRS.find(p => p.ticker === input.pair) ?? DEMO_PAIRS[0]
       liveRef.current = createLiveSession({
         strategy: input.strategy,
         label,
+        ticker: pair.ticker,
+        price: pair.price,
+        pip: pair.pip,
         entry: plan.entry,
         seed,
         results: results.map((result, i) => ({ result, profit: profits[i] })),
       })
       rawRef.current = []
-      adaptRef.current = []
       setLiveBars([])
+      setPhase({ kind: 'scan', text: `Identificando oportunidade · ${label}` })
       const statusNext: BotStatus = {
         running: true,
         activeId: 1,
@@ -178,7 +176,7 @@ export default function Operacoes() {
       const next: DemoScene = {
         status: statusNext,
         candles: [],
-        logs: ['[SISTEMA] Aguardando o gatilho no gráfico ao vivo'],
+        logs: ['✅ Monitorando ao vivo — identificando oportunidade', '🟢 Bot iniciado'],
         balance: startBalance,
         plan,
         pair: input.pair,
@@ -198,6 +196,7 @@ export default function Operacoes() {
     }
 
     liveRef.current = null
+    setPhase(null)
     const next = buildScene({ ...input, seed: Date.now() >>> 0 })
     setForm(input)
     setScene(next)
@@ -211,6 +210,7 @@ export default function Operacoes() {
 
   function handleStop() {
     liveRef.current = null
+    setPhase(null)
     setStatus(prev => (prev ? { ...prev, running: false } : prev))
     setScene(prev => (prev ? { ...prev, status: { ...prev.status, running: false } } : prev))
     setLogs(prev => ['[SISTEMA] Bot parado', ...prev].slice(0, 200))
@@ -229,7 +229,9 @@ export default function Operacoes() {
               <span className="pair-badge">{status.activeTicker}</span>
               <span className="instrument-badge">{status.instrument?.toUpperCase()}</span>
               {isRunning && <span className="running-dot active" />}
-              {isRunning && <span className="live-badge">● AO VIVO</span>}
+              {isRunning && phase && form.mode === 'live' && (
+                <span className={`live-phase live-phase--${phase.kind}`}>{phase.text}</span>
+              )}
               {!isRunning && <span className="bar-idle">Sessão encerrada</span>}
             </>
           ) : (
@@ -259,13 +261,14 @@ export default function Operacoes() {
       <div className="operacoes-body">
         <div className="operacoes-left">
           <LiveChart
-            activeId={form.mode === 'live' ? (status?.activeTicker ? 1 : 1) : (candles.length ? 1 : 0)}
+            activeId={form.mode === 'live' ? 1 : (candles.length ? 1 : 0)}
             activeTicker={status?.activeTicker || form.pair}
             bars={form.mode === 'live' ? liveBars : candles}
             stream={form.mode === 'live'}
             onStream={onStream}
+            phase={form.mode === 'live' ? phase : null}
           />
-          <LogConsole logs={logs} />
+          <LogConsole logs={logs} forceOpen={form.mode === 'live' && isRunning} />
         </div>
         <aside className="operacoes-panel">
           <ScoreBoard status={status} activeBalance={balance} currency={currency} />

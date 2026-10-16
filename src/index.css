@@ -2055,6 +2055,31 @@ select option { background: var(--bg-card); }
   pointer-events: none;
 }
 
+.chart-phase {
+  position: absolute;
+  left: 14px;
+  top: 48px;
+  z-index: 2;
+  max-width: calc(100% - 28px);
+  padding: 6px 10px;
+  border-radius: 2px;
+  background: rgba(8, 8, 8, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f2f2f2;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+.chart-phase--scan { border-color: rgba(255, 196, 92, 0.45); color: #ffc45c; }
+.chart-phase--found { border-color: rgba(255, 138, 76, 0.7); color: #ff8a4c; }
+.chart-phase--entry { border-color: rgba(61, 214, 140, 0.7); color: #3dd68c; }
+
+.live-phase {
+  font-size: 12px;
+  color: #ffc45c;
+}
+
 /* ─── Log (discreto, recolhível) ─────────────────────────────────────────── */
 .log-console {
   flex-shrink: 0;

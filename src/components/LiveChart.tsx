@@ -19,6 +19,7 @@ interface Props {
   bars?: Candle[]
   stream?: boolean
   onStream?: (candles: Candle[]) => void
+  phase?: { kind: string; text: string } | null
 }
 
 type Bar = { time: UTCTimestamp; open: number; high: number; low: number; close: number }
@@ -52,7 +53,7 @@ function framePrices(chart: ReturnType<typeof createChart>, bars: Bar[]) {
   chart.priceScale('right').setVisibleRange({ from: low - pad, to: high + pad })
 }
 
-export default function LiveChart({ activeId, activeTicker, bars, stream, onStream }: Props) {
+export default function LiveChart({ activeId, activeTicker, bars, stream, onStream, phase }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const seriesRef = useRef<ReturnType<ReturnType<typeof createChart>['addSeries']> | null>(null)
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null)
@@ -243,6 +244,9 @@ export default function LiveChart({ activeId, activeTicker, bars, stream, onStre
         <span className="chart-tf">M1</span>
       </div>
       <div ref={containerRef} className="chart-container" />
+      {phase && (
+        <div className={`chart-phase chart-phase--${phase.kind}`}>{phase.text}</div>
+      )}
       {(showNote || showEmpty) && (
         <div className="chart-placeholder">
           {note ?? 'Configure o histórico para exibir a sessão'}
