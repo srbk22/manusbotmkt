@@ -132,8 +132,8 @@ window.manusPro = {
   sdkActives: (instrument?: 'binary' | 'digital') =>
     api(`/api/sdk/actives?instrument=${instrument ?? 'digital'}`),
 
-  botStart: async () => ({ ok: false, error: 'A vitrine não envia ordens.' }),
-  botStop: async () => ({ ok: false, error: 'A vitrine não envia ordens.' }),
+  botStart: async () => ({ ok: false, error: 'Não foi possível iniciar o bot.' }),
+  botStop: async () => ({ ok: false, error: 'Não foi possível parar o bot.' }),
   botGetStatus: async () => ({
     running: false,
     activeId: 0,

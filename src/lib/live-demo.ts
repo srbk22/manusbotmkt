@@ -49,10 +49,7 @@ export function createLiveSession(input: {
 }) {
   const rng = rngOf(input.seed || 1)
   const slots = schedule(input, rng)
-  const logs: string[] = [
-    '✅ Monitorando ao vivo — identificando oportunidade',
-    '🟢 Bot iniciado',
-  ]
+  const logs: string[] = ['[SISTEMA] Bot iniciado']
   const trades: TradeRecord[] = []
 
   function tick(now: number, market: DemoCandle[]): LiveStep {
@@ -60,7 +57,6 @@ export function createLiveSession(input: {
     for (const slot of slots) {
       if (!slot.found && now >= slot.at - 4_000 && !slot.entered) {
         slot.found = true
-        logs.unshift(`✨ Oportunidade identificada · ${input.label} · ${side(slot.direction)}`)
       }
       if (!slot.entered && now >= slot.at) {
         slot.entered = true
@@ -73,7 +69,7 @@ export function createLiveSession(input: {
           result: 'PENDING',
           profit: 0,
         })
-        logs.unshift(`📍 ${input.label}: ${slot.direction} | ${input.ticker} | ${slot.amount.toFixed(2)} BRL`)
+        logs.unshift(`[ENTRADA] ${input.label} → ${slot.direction} R$ ${slot.amount.toFixed(2)}`)
       }
       if (slot.entered && !slot.settled && now >= slot.settleAt) {
         slot.settled = true
@@ -83,9 +79,8 @@ export function createLiveSession(input: {
           trade.profit = slot.profit
         }
         const sign = slot.profit >= 0 ? '+' : ''
-        logs.unshift(`${slot.result === 'WIN' ? '✅ WIN' : '❌ LOSS'} | ${input.label} | ${slot.direction} | ${sign}${slot.profit.toFixed(2)}`)
-        if (slots.every(s => s.settled)) logs.unshift('[SISTEMA] Sessão encerrada no lucro configurado')
-        else logs.unshift('✅ Monitorando ao vivo — identificando oportunidade')
+        logs.unshift(`[${slot.result}] ${input.label} ${slot.direction} ${sign}R$ ${Math.abs(slot.profit).toFixed(2)}`)
+        if (slots.every(s => s.settled)) logs.unshift('[SISTEMA] Bot parado')
       }
     }
 

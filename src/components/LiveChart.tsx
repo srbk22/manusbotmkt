@@ -19,7 +19,6 @@ interface Props {
   bars?: Candle[]
   stream?: boolean
   onStream?: (candles: Candle[]) => void
-  phase?: { kind: string; text: string } | null
 }
 
 type Bar = { time: UTCTimestamp; open: number; high: number; low: number; close: number }
@@ -37,7 +36,7 @@ function toBar(c: Candle): Bar | null {
   return { time: time as UTCTimestamp, open, high, low, close }
 }
 
-export default function LiveChart({ activeId, activeTicker, bars, stream, onStream, phase }: Props) {
+export default function LiveChart({ activeId, activeTicker, bars, stream, onStream }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const seriesRef = useRef<ReturnType<ReturnType<typeof createChart>['addSeries']> | null>(null)
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null)
@@ -239,12 +238,9 @@ export default function LiveChart({ activeId, activeTicker, bars, stream, onStre
         <span className="chart-tf">M1</span>
       </div>
       <div ref={containerRef} className="chart-container" />
-      {phase && (
-        <div className={`chart-phase chart-phase--${phase.kind}`}>{phase.text}</div>
-      )}
       {(showNote || showEmpty) && (
         <div className="chart-placeholder">
-          {note ?? 'Configure o histórico para exibir a sessão'}
+          {note ?? 'Inicie o bot para visualizar o gráfico'}
         </div>
       )}
     </div>

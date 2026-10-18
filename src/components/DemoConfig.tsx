@@ -85,12 +85,12 @@ export default function DemoConfig({ initial, actives, realBalance, onApply, onC
         <div className="bot-config-accent" aria-hidden />
         <header className="bot-config-header">
           <div className="bot-config-header-text">
-            <p className="bot-config-eyebrow">Exibição</p>
+            <p className="bot-config-eyebrow">Nova sessão</p>
             <h2 id="demo-config-title" className="bot-config-title">
-              Histórico e <span className="bot-config-title-manus">lucro</span>
+              Calibrar <span className="bot-config-title-manus">Manus</span> IA
             </h2>
             <p className="bot-config-sub">
-              Defina o lucro e a quantidade de operações. O restante é calculado para a sessão fechar nesse valor.
+              Defina mercado, estratégia e a meta da sessão antes de iniciar.
             </p>
           </div>
           <button type="button" className="bot-config-close" onClick={onClose} aria-label="Fechar">
@@ -138,8 +138,8 @@ export default function DemoConfig({ initial, actives, realBalance, onApply, onC
                 </div>
                 <p className="bot-config-hint">
                   {mode === 'static'
-                    ? 'Gera o histórico agora e mostra a sessão inteira.'
-                    : 'Começa sem operações. Cada entrada segue a estratégia no gráfico real, e a vela do resultado fecha no lucro configurado.'}
+                    ? 'A sessão aparece completa ao iniciar.'
+                    : 'As operações entram conforme a estratégia.'}
                 </p>
               </div>
 
@@ -184,7 +184,7 @@ export default function DemoConfig({ initial, actives, realBalance, onApply, onC
                   disabled={mode === 'live'}
                 />
                 {mode === 'live' && (
-                  <p className="bot-config-hint">No ao vivo o saldo é o da corretora. A mudança fica só nesta tela.</p>
+                  <p className="bot-config-hint">O saldo é o da corretora.</p>
                 )}
               </label>
             </section>
@@ -232,7 +232,7 @@ export default function DemoConfig({ initial, actives, realBalance, onApply, onC
               )}
               {entryHigh && (
                 <p className="bot-config-hint">
-                  A entrada ficou alta. Mais operações deixam o histórico mais natural.
+                  A entrada ficou alta. Aumente as operações para reduzir o valor.
                 </p>
               )}
             </section>
@@ -246,7 +246,7 @@ export default function DemoConfig({ initial, actives, realBalance, onApply, onC
             onClick={apply}
             disabled={!canApply}
           >
-            {mode === 'static' ? 'Gerar histórico' : 'Iniciar ao vivo'}
+            ▶ Iniciar Bot
           </button>
         </footer>
       </div>

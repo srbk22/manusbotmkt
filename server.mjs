@@ -87,7 +87,7 @@ const server = createServer(async (req, res) => {
 
   if (req.url?.split('?')[0].startsWith('/api/bot')) {
     res.writeHead(403, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ ok: false, error: 'A vitrine não envia ordens.' }))
+    res.end(JSON.stringify({ ok: false, error: 'Não foi possível iniciar o bot.' }))
     return
   }
 

@@ -6,7 +6,7 @@ import TradeLog from '../components/TradeLog'
 import LiveChart from '../components/LiveChart'
 import LogConsole from '../components/LogConsole'
 import { buildScene, DEMO_PAIRS, DEMO_STRATEGIES, layoutResults, planSession, profitsFor, type DemoCandle, type DemoScene, type DemoStrategy } from '../lib/demo-session'
-import { createLiveSession, overlayTrades, type LivePhase } from '../lib/live-demo'
+import { createLiveSession, overlayTrades } from '../lib/live-demo'
 
 const STORAGE_KEY = 'manus-marketing:scene'
 
@@ -71,7 +71,6 @@ export default function Operacoes() {
   const [liveBase, setLiveBase] = useState<number | null>(null)
   const [actives, setActives] = useState<ActiveInfo[]>([])
   const [liveBars, setLiveBars] = useState<DemoCandle[]>([])
-  const [phase, setPhase] = useState<LivePhase | null>(null)
   const liveRef = useRef<ReturnType<typeof createLiveSession> | null>(null)
   const rawRef = useRef<DemoCandle[]>([])
   const staticTrades = useRef(saved && !savedIsLive ? saved.status.trades : [])
@@ -119,7 +118,6 @@ export default function Operacoes() {
       if (!session || !runningRef.current) return
       const step = session.tick(Date.now(), rawRef.current)
       setLiveBars(step.candles)
-      setPhase(step.phase)
       setLogs(step.logs)
       setStatus(prev => {
         if (!prev) return prev
@@ -147,7 +145,6 @@ export default function Operacoes() {
       })
       if (step.done) {
         liveRef.current = null
-        setPhase({ kind: 'idle', text: 'Sessão encerrada' })
       }
     }, 300)
     return () => window.clearInterval(id)
@@ -185,7 +182,6 @@ export default function Operacoes() {
         results: results.map((result, i) => ({ result, profit: profits[i] })),
       })
       setLiveBars(rawRef.current)
-      setPhase({ kind: 'scan', text: `Identificando oportunidade · ${label}` })
       const statusNext: BotStatus = {
         running: true,
         activeId: 1,
@@ -204,7 +200,7 @@ export default function Operacoes() {
       const next: DemoScene = {
         status: statusNext,
         candles: [],
-        logs: ['✅ Monitorando ao vivo — identificando oportunidade', '🟢 Bot iniciado'],
+        logs: ['[SISTEMA] Bot iniciado'],
         balance: startBalance,
         plan,
         pair: input.pair,
@@ -225,7 +221,6 @@ export default function Operacoes() {
 
     liveRef.current = null
     setLiveBase(null)
-    setPhase(null)
     const next = buildScene({ ...input, seed: Date.now() >>> 0 })
     staticTrades.current = next.status.trades
     const painted = overlayTrades(rawRef.current, next.status.trades)
@@ -242,53 +237,29 @@ export default function Operacoes() {
 
   function handleStop() {
     liveRef.current = null
-    setPhase(null)
     setStatus(prev => (prev ? { ...prev, running: false } : prev))
     setScene(prev => (prev ? { ...prev, status: { ...prev.status, running: false } } : prev))
     setLogs(prev => ['[SISTEMA] Bot parado', ...prev].slice(0, 200))
   }
 
   const isRunning = status?.running ?? false
-  const configured = (status?.trades.length ?? 0) > 0
   const currency = 'BRL'
 
   return (
     <div className="operacoes">
       <div className="operacoes-bar">
         <div className="operacoes-bar-left">
-          {status?.activeId ? (
+          {isRunning && (
             <>
-              <span className="pair-badge">{status.activeTicker}</span>
-              <span className="instrument-badge">{status.instrument?.toUpperCase()}</span>
-              {isRunning && <span className="running-dot active" />}
-              {isRunning && phase && form.mode === 'live' && (
-                <span className={`live-phase live-phase--${phase.kind}`}>{phase.text}</span>
-              )}
-              {!isRunning && <span className="bar-idle">Sessão encerrada</span>}
+              <span className="pair-badge">{status?.activeTicker}</span>
+              <span className="instrument-badge">{status?.instrument?.toUpperCase()}</span>
+              <span className="running-dot active" />
+              <span className="live-badge">● AO VIVO</span>
             </>
-          ) : (
-            <span className="bar-idle">Configure o histórico para exibir a sessão</span>
           )}
+          {!isRunning && <span className="bar-idle">Bot aguardando configuração</span>}
         </div>
-        {configured && (
-          <div className="operacoes-bar-right">
-            <button
-              type="button"
-              className="demo-history-btn"
-              onClick={() => setConfigOpen(true)}
-              aria-label="Configurar histórico"
-              title="Configurar histórico"
-            >
-              <svg viewBox="0 0 16 16" aria-hidden>
-                <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                <circle cx="5" cy="4" r="1.4" fill="currentColor" />
-                <circle cx="11" cy="8" r="1.4" fill="currentColor" />
-                <circle cx="7" cy="12" r="1.4" fill="currentColor" />
-              </svg>
-            </button>
-          </div>
-        )}
-      </div>
+        </div>
 
       <div className="operacoes-body">
         <div className="operacoes-left">
@@ -298,7 +269,6 @@ export default function Operacoes() {
             bars={form.mode === 'live' ? liveBars : (candles.length ? candles : liveBars)}
             stream={Boolean(status?.activeTicker || form.pair)}
             onStream={onStream}
-            phase={form.mode === 'live' ? phase : null}
           />
           <LogConsole logs={logs} forceOpen={form.mode === 'live' && isRunning} />
         </div>
