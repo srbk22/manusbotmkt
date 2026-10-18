@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { BotStatus } from '../types'
+import type { BotStatus, ActiveInfo, BalanceInfo } from '../types'
 import DemoConfig, { type DemoConfigInput } from '../components/DemoConfig'
 import ScoreBoard from '../components/ScoreBoard'
 import TradeLog from '../components/TradeLog'
@@ -61,6 +61,8 @@ export default function Operacoes() {
   const [candles, setCandles] = useState<DemoCandle[]>(saved?.candles ?? [])
   const [balance, setBalance] = useState(saved?.balance ?? 0)
   const [configOpen, setConfigOpen] = useState(false)
+  const [balances, setBalances] = useState<BalanceInfo[]>([])
+  const [actives, setActives] = useState<ActiveInfo[]>([])
   const [liveBars, setLiveBars] = useState<DemoCandle[]>([])
   const [phase, setPhase] = useState<LivePhase | null>(null)
   const liveRef = useRef<ReturnType<typeof createLiveSession> | null>(null)
@@ -79,6 +81,15 @@ export default function Operacoes() {
     : DEFAULT_INPUT)
 
   runningRef.current = status?.running ?? false
+
+  useEffect(() => {
+    void window.manusPro.sdkBalances().then(res => {
+      if (res.ok && res.balances) setBalances(res.balances)
+    }).catch(() => {})
+    void window.manusPro.sdkActives('digital').then(res => {
+      if (res.ok && res.actives) setActives(res.actives)
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!scene) {
@@ -271,24 +282,26 @@ export default function Operacoes() {
           <LogConsole logs={logs} forceOpen={form.mode === 'live' && isRunning} />
         </div>
         <aside className="operacoes-panel">
-          <ScoreBoard status={status} activeBalance={balance} currency={currency} />
-          {(isRunning || !configured) && (
-            <div className="operacoes-panel-actions">
-              {isRunning ? (
-                <button type="button" className="btn-stop btn-stop--panel" onClick={handleStop}>
-                  ■ Parar Bot
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="btn-start btn-start--panel"
-                  onClick={() => setConfigOpen(true)}
-                >
-                  Configurar histórico
-                </button>
-              )}
-            </div>
-          )}
+          <ScoreBoard
+            status={status}
+            activeBalance={balances.find(b => b.type === 'real')?.amount ?? balances[0]?.amount ?? 0}
+            currency={balances.find(b => b.type === 'real')?.currency ?? balances[0]?.currency ?? currency}
+          />
+          <div className="operacoes-panel-actions">
+            {isRunning ? (
+              <button type="button" className="btn-stop btn-stop--panel" onClick={handleStop}>
+                ■ Parar Bot
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-start btn-start--panel"
+                onClick={() => setConfigOpen(true)}
+              >
+                ▶ Iniciar Bot
+              </button>
+            )}
+          </div>
           <TradeLog trades={status?.trades ?? []} currency={currency} />
         </aside>
       </div>
@@ -296,6 +309,7 @@ export default function Operacoes() {
       {configOpen && (
         <DemoConfig
           initial={form}
+          actives={actives}
           onApply={applyConfig}
           onClose={() => setConfigOpen(false)}
         />

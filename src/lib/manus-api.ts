@@ -132,11 +132,23 @@ window.manusPro = {
   sdkActives: (instrument?: 'binary' | 'digital') =>
     api(`/api/sdk/actives?instrument=${instrument ?? 'digital'}`),
 
-  botStart: (config: any) =>
-    api('/api/bot/start', { method: 'POST', body: JSON.stringify(config) }),
-  botStop: () => api('/api/bot/stop', { method: 'POST' }),
-  botGetStatus: () => api('/api/bot/status'),
-  botChartSnapshot: () => api('/api/bot/chart-snapshot'),
+  botStart: async () => ({ ok: false, error: 'A vitrine não envia ordens.' }),
+  botStop: async () => ({ ok: false, error: 'A vitrine não envia ordens.' }),
+  botGetStatus: async () => ({
+    running: false,
+    activeId: 0,
+    activeTicker: '',
+    instrument: 'digital',
+    balanceStart: 0,
+    balanceCurrent: 0,
+    totalPnl: 0,
+    wins: 0,
+    losses: 0,
+    consecLosses: 0,
+    winRate: 0,
+    trades: [],
+  }),
+  botChartSnapshot: async () => [],
 
   appGetVersion: () => api('/api/version'),
   appCheckUpdate: () => api('/api/check-update', { method: 'POST' }),

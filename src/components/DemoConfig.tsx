@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatCurrency } from '../lib/currency'
 import { DEMO_PAIRS, DEMO_STRATEGIES, planSession, type DemoStrategy } from '../lib/demo-session'
+import type { ActiveInfo } from '../types'
+
+function brokerTicker(raw: string): string {
+  const ticker = raw.toUpperCase().replace(/\s*\(OTC\)/g, '-OTC').replace(/[^A-Z0-9-]/g, '')
+  return ticker || raw
+}
 
 export interface DemoConfigInput {
   profit: number
@@ -15,11 +21,12 @@ export interface DemoConfigInput {
 
 interface Props {
   initial: DemoConfigInput
+  actives?: ActiveInfo[]
   onApply: (input: DemoConfigInput) => void
   onClose: () => void
 }
 
-export default function DemoConfig({ initial, onApply, onClose }: Props) {
+export default function DemoConfig({ initial, actives, onApply, onClose }: Props) {
   const [profit, setProfit] = useState(String(initial.profit))
   const [operations, setOperations] = useState(String(initial.operations))
   const [payout, setPayout] = useState(String(Math.round(initial.payout * 100)))
@@ -182,10 +189,18 @@ export default function DemoConfig({ initial, onApply, onClose }: Props) {
 
               <label className="bot-config-field">
                 <span className="bot-config-label">Par</span>
-                <select value={pair} onChange={e => setPair(e.target.value)}>
-                  {DEMO_PAIRS.map(p => (
-                    <option key={p.ticker} value={p.ticker}>{p.ticker}</option>
-                  ))}
+                <select
+                  value={pair}
+                  onChange={e => setPair(e.target.value)}
+                >
+                  {(actives?.length ? actives.map(a => ({
+                    ticker: brokerTicker(a.ticker || a.name),
+                    label: a.name || a.ticker,
+                  })) : DEMO_PAIRS.map(p => ({ ticker: p.ticker, label: p.ticker })))
+                    .filter((item, index, list) => item.ticker && list.findIndex(other => other.ticker === item.ticker) === index)
+                    .map(item => (
+                      <option key={item.ticker} value={item.ticker}>{item.label}</option>
+                    ))}
                 </select>
               </label>
 

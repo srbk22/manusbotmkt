@@ -7,11 +7,14 @@ export default defineConfig({
     port: 5175,
     strictPort: true,
     proxy: {
-      '/api/chart': {
-        target: 'https://manusbot.up.railway.app',
-        changeOrigin: true,
-        secure: true,
-      },
+      '/api/session': { target: 'https://manusbot.up.railway.app', changeOrigin: true, secure: true },
+      '/api/auth': { target: 'https://manusbot.up.railway.app', changeOrigin: true, secure: true },
+      '/api/sdk': { target: 'https://manusbot.up.railway.app', changeOrigin: true, secure: true },
+      '/api/chart': { target: 'https://manusbot.up.railway.app', changeOrigin: true, secure: true },
+      '/api/user': { target: 'https://manusbot.up.railway.app', changeOrigin: true, secure: true },
+      '/api/embed-origin': { target: 'https://manusbot.up.railway.app', changeOrigin: true, secure: true },
+      '/api/version': { target: 'https://manusbot.up.railway.app', changeOrigin: true, secure: true },
+      '/auth': { target: 'https://manusbot.up.railway.app', changeOrigin: true, secure: true },
     },
   },
 })
