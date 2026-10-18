@@ -22,11 +22,12 @@ export interface DemoConfigInput {
 interface Props {
   initial: DemoConfigInput
   actives?: ActiveInfo[]
+  realBalance?: number
   onApply: (input: DemoConfigInput) => void
   onClose: () => void
 }
 
-export default function DemoConfig({ initial, actives, onApply, onClose }: Props) {
+export default function DemoConfig({ initial, actives, realBalance, onApply, onClose }: Props) {
   const [profit, setProfit] = useState(String(initial.profit))
   const [operations, setOperations] = useState(String(initial.operations))
   const [payout, setPayout] = useState(String(Math.round(initial.payout * 100)))
@@ -177,10 +178,14 @@ export default function DemoConfig({ initial, actives, onApply, onClose }: Props
                 <input
                   type="number"
                   min="0"
-                  step="1"
-                  value={startBalance}
+                  step="0.01"
+                  value={mode === 'live' ? (realBalance ?? 0) : startBalance}
                   onChange={e => setStartBalance(e.target.value)}
+                  disabled={mode === 'live'}
                 />
+                {mode === 'live' && (
+                  <p className="bot-config-hint">No ao vivo o saldo é o da corretora. A mudança fica só nesta tela.</p>
+                )}
               </label>
             </section>
 

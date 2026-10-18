@@ -2943,6 +2943,11 @@ select option { background: var(--bg-card); }
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
+.bot-config-sheet input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .bot-config-sheet input:hover,
 .bot-config-sheet select:hover {
   border-color: rgba(255, 255, 255, 0.32);

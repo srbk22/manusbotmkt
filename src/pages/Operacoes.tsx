@@ -43,6 +43,11 @@ function loadScene(): DemoScene | null {
   }
 }
 
+function accountAmount(list: BalanceInfo[]): number {
+  const account = list.find(b => b.type === 'real') ?? list[0]
+  return Math.round((account?.amount ?? 0) * 100) / 100
+}
+
 function rngOf(seed: number): () => number {
   let s = seed >>> 0
   return () => {
@@ -55,19 +60,22 @@ function rngOf(seed: number): () => number {
 
 export default function Operacoes() {
   const saved = loadScene()
-  const [scene, setScene] = useState<DemoScene | null>(saved)
-  const [status, setStatus] = useState<BotStatus | null>(saved?.status ?? null)
-  const [logs, setLogs] = useState<string[]>(saved?.logs ?? [])
-  const [candles, setCandles] = useState<DemoCandle[]>(saved?.candles ?? [])
-  const [balance, setBalance] = useState(saved?.balance ?? 0)
+  const savedIsLive = saved?.mode === 'live'
+  const [scene, setScene] = useState<DemoScene | null>(savedIsLive ? null : saved)
+  const [status, setStatus] = useState<BotStatus | null>(savedIsLive ? null : saved?.status ?? null)
+  const [logs, setLogs] = useState<string[]>(savedIsLive ? [] : saved?.logs ?? [])
+  const [candles, setCandles] = useState<DemoCandle[]>(savedIsLive ? [] : saved?.candles ?? [])
+  const [balance, setBalance] = useState(savedIsLive ? 0 : saved?.balance ?? 0)
   const [configOpen, setConfigOpen] = useState(false)
   const [balances, setBalances] = useState<BalanceInfo[]>([])
+  const [liveBase, setLiveBase] = useState<number | null>(null)
   const [actives, setActives] = useState<ActiveInfo[]>([])
   const [liveBars, setLiveBars] = useState<DemoCandle[]>([])
   const [phase, setPhase] = useState<LivePhase | null>(null)
   const liveRef = useRef<ReturnType<typeof createLiveSession> | null>(null)
   const rawRef = useRef<DemoCandle[]>([])
   const runningRef = useRef(false)
+  const liveTarget = useRef(0)
   const [form, setForm] = useState<DemoConfigInput>(saved
     ? {
         profit: saved.plan.profit,
@@ -117,7 +125,9 @@ export default function Operacoes() {
         const closed = step.trades.filter(t => t.result !== 'PENDING')
         const wins = closed.filter(t => t.result === 'WIN').length
         const losses = closed.filter(t => t.result === 'LOSS').length
-        const totalPnl = Math.round(closed.reduce((sum, t) => sum + t.profit, 0) * 100) / 100
+        const totalPnl = step.done
+          ? liveTarget.current
+          : Math.round(closed.reduce((sum, t) => sum + t.profit, 0) * 100) / 100
         return {
           ...prev,
           running: step.done ? false : prev.running,
@@ -151,8 +161,10 @@ export default function Operacoes() {
       const plan = planSession(input.profit, input.operations, input.payout)
       const seed = Date.now() >>> 0
       const label = DEMO_STRATEGIES.find(s => s.id === input.strategy)?.label ?? 'Prime'
-      const startBalance = Math.round(Math.max(0, input.startBalance) * 100) / 100
+      const startBalance = accountAmount(balances)
+      setLiveBase(startBalance)
       if (!plan.possible) return
+      liveTarget.current = plan.profit
       const results = layoutResults(plan.wins, plan.losses, rngOf(seed || 1))
       const profits = profitsFor(results, plan.entry, plan.payout, plan.profit)
       const pair = DEMO_PAIRS.find(p => p.ticker === input.pair) ?? DEMO_PAIRS[0]
@@ -207,6 +219,7 @@ export default function Operacoes() {
     }
 
     liveRef.current = null
+    setLiveBase(null)
     setPhase(null)
     const next = buildScene({ ...input, seed: Date.now() >>> 0 })
     setForm(input)
@@ -284,7 +297,11 @@ export default function Operacoes() {
         <aside className="operacoes-panel">
           <ScoreBoard
             status={status}
-            activeBalance={balances.find(b => b.type === 'real')?.amount ?? balances[0]?.amount ?? 0}
+            activeBalance={
+              form.mode === 'live' && liveBase !== null
+                ? Math.round((liveBase + (status?.totalPnl ?? 0)) * 100) / 100
+                : accountAmount(balances)
+            }
             currency={balances.find(b => b.type === 'real')?.currency ?? balances[0]?.currency ?? currency}
           />
           <div className="operacoes-panel-actions">
@@ -310,6 +327,7 @@ export default function Operacoes() {
         <DemoConfig
           initial={form}
           actives={actives}
+          realBalance={accountAmount(balances)}
           onApply={applyConfig}
           onClose={() => setConfigOpen(false)}
         />
