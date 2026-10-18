@@ -54,11 +54,9 @@ export function createLiveSession(input: {
     '🟢 Bot iniciado',
   ]
   const trades: TradeRecord[] = []
-  const synthetic = new Map<number, DemoCandle>()
-  let seeded = false
 
   function tick(now: number, market: DemoCandle[]): LiveStep {
-    const base = market.length ? market : ensureSynthetic(now)
+    const base = market
     for (const slot of slots) {
       if (!slot.found && now >= slot.at - 4_000 && !slot.entered) {
         slot.found = true
@@ -94,20 +92,8 @@ export function createLiveSession(input: {
     const candles = base.map(c => {
       const slot = slots.find(s => s.entered && s.from === c.from)
       if (!slot) return c
-      return paintResult(c, slot, now)
+      return paintResult(c, slot)
     })
-
-    const active = slots.find(s => s.entered && !s.settled)
-    if (active && !candles.some(c => c.from === active.from)) {
-      const open = base[base.length - 1]?.close ?? input.price
-      candles.push(paintResult({
-        from: active.from,
-        open,
-        close: open,
-        min: open,
-        max: open,
-      }, active, now))
-    }
 
     return {
       trades: trades.map(t => ({ ...t })),
@@ -116,41 +102,6 @@ export function createLiveSession(input: {
       candles: candles.sort((a, b) => a.from - b.from),
       phase: currentPhase(slots, now, input.label),
     }
-  }
-
-  function ensureSynthetic(now: number): DemoCandle[] {
-    const minute = Math.floor(now / 1000 / 60) * 60
-    if (!seeded) {
-      let price = input.price
-      for (let i = 90; i >= 1; i--) {
-        const from = minute - i * 60
-        const open = price
-        const delta = (rng() - 0.48) * input.pip * 8
-        const close = open + delta
-        synthetic.set(from, {
-          from,
-          open,
-          close,
-          min: Math.min(open, close) - input.pip,
-          max: Math.max(open, close) + input.pip,
-        })
-        price = close
-      }
-      seeded = true
-    }
-    const prev = synthetic.get(minute - 60)
-    const open = prev?.close ?? input.price
-    const current = synthetic.get(minute)
-    const drift = (rng() - 0.5) * input.pip * 2
-    const close = (current?.close ?? open) + drift
-    synthetic.set(minute, {
-      from: minute,
-      open: current?.open ?? open,
-      close,
-      min: Math.min(current?.min ?? open, close),
-      max: Math.max(current?.max ?? open, close),
-    })
-    return [...synthetic.values()].sort((a, b) => a.from - b.from)
   }
 
   return { tick }
@@ -247,11 +198,15 @@ function currentPhase(slots: Slot[], now: number, label: string): LivePhase {
   return { kind: 'scan', text: `Identificando oportunidade · ${label} · ${sec}s` }
 }
 
-function paintResult(candle: DemoCandle, slot: Slot, now: number): DemoCandle {
-  const span = Math.max(1_000, slot.settleAt - slot.at)
-  const progress = Math.min(1, Math.max(0.15, (now - slot.at) / span))
-  const body = Math.max(Math.abs(candle.open) * 0.00012, Math.abs(candle.close - candle.open)) * (0.45 + progress)
-  const down = (slot.direction === 'PUT') === (slot.result === 'WIN')
+export function paintTradeCandle(
+  candle: DemoCandle,
+  direction: 'CALL' | 'PUT',
+  result: 'WIN' | 'LOSS',
+): DemoCandle {
+  const down = (direction === 'PUT') === (result === 'WIN')
+  const isDown = candle.close < candle.open
+  if (down === isDown && candle.close !== candle.open) return candle
+  const body = Math.max(Math.abs(candle.close - candle.open), Math.abs(candle.open) * 0.00002)
   const close = down ? candle.open - body : candle.open + body
   return {
     from: candle.from,
@@ -260,6 +215,27 @@ function paintResult(candle: DemoCandle, slot: Slot, now: number): DemoCandle {
     min: Math.min(candle.min, candle.open, close),
     max: Math.max(candle.max, candle.open, close),
   }
+}
+
+export function overlayTrades(market: DemoCandle[], trades: { enteredAt: number; direction: 'CALL' | 'PUT'; result: string }[]): DemoCandle[] {
+  if (!market.length || !trades.length) return market
+  const byMinute = new Map<number, { direction: 'CALL' | 'PUT'; result: 'WIN' | 'LOSS' }>()
+  for (const trade of trades) {
+    if (trade.result !== 'WIN' && trade.result !== 'LOSS') continue
+    byMinute.set(Math.floor(trade.enteredAt / 60_000) * 60, {
+      direction: trade.direction,
+      result: trade.result,
+    })
+  }
+  return market.map(candle => {
+    const trade = byMinute.get(candle.from)
+    if (!trade) return candle
+    return paintTradeCandle(candle, trade.direction, trade.result)
+  })
+}
+
+function paintResult(candle: DemoCandle, slot: Slot): DemoCandle {
+  return paintTradeCandle(candle, slot.direction, slot.result)
 }
 
 function side(direction: 'CALL' | 'PUT'): string {

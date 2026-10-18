@@ -6,7 +6,7 @@ import TradeLog from '../components/TradeLog'
 import LiveChart from '../components/LiveChart'
 import LogConsole from '../components/LogConsole'
 import { buildScene, DEMO_PAIRS, DEMO_STRATEGIES, layoutResults, planSession, profitsFor, type DemoCandle, type DemoScene, type DemoStrategy } from '../lib/demo-session'
-import { createLiveSession, type LivePhase } from '../lib/live-demo'
+import { createLiveSession, overlayTrades, type LivePhase } from '../lib/live-demo'
 
 const STORAGE_KEY = 'manus-marketing:scene'
 
@@ -64,7 +64,7 @@ export default function Operacoes() {
   const [scene, setScene] = useState<DemoScene | null>(savedIsLive ? null : saved)
   const [status, setStatus] = useState<BotStatus | null>(savedIsLive ? null : saved?.status ?? null)
   const [logs, setLogs] = useState<string[]>(savedIsLive ? [] : saved?.logs ?? [])
-  const [candles, setCandles] = useState<DemoCandle[]>(savedIsLive ? [] : saved?.candles ?? [])
+  const [candles, setCandles] = useState<DemoCandle[]>([])
   const [balance, setBalance] = useState(savedIsLive ? 0 : saved?.balance ?? 0)
   const [configOpen, setConfigOpen] = useState(false)
   const [balances, setBalances] = useState<BalanceInfo[]>([])
@@ -74,6 +74,7 @@ export default function Operacoes() {
   const [phase, setPhase] = useState<LivePhase | null>(null)
   const liveRef = useRef<ReturnType<typeof createLiveSession> | null>(null)
   const rawRef = useRef<DemoCandle[]>([])
+  const staticTrades = useRef(saved && !savedIsLive ? saved.status.trades : [])
   const runningRef = useRef(false)
   const liveTarget = useRef(0)
   const [form, setForm] = useState<DemoConfigInput>(saved
@@ -152,8 +153,12 @@ export default function Operacoes() {
     return () => window.clearInterval(id)
   }, [form.mode, status?.running, status?.balanceStart])
 
-  function onStream(candles: DemoCandle[]) {
-    rawRef.current = candles
+  function onStream(next: DemoCandle[]) {
+    rawRef.current = next
+    if (liveRef.current) return
+    const painted = staticTrades.current.length ? overlayTrades(next, staticTrades.current) : next
+    setLiveBars(painted)
+    if (staticTrades.current.length) setCandles(painted)
   }
 
   function applyConfig(input: DemoConfigInput) {
@@ -168,18 +173,18 @@ export default function Operacoes() {
       const results = layoutResults(plan.wins, plan.losses, rngOf(seed || 1))
       const profits = profitsFor(results, plan.entry, plan.payout, plan.profit)
       const pair = DEMO_PAIRS.find(p => p.ticker === input.pair) ?? DEMO_PAIRS[0]
+      staticTrades.current = []
       liveRef.current = createLiveSession({
         strategy: input.strategy,
         label,
-        ticker: pair.ticker,
+        ticker: input.pair,
         price: pair.price,
         pip: pair.pip,
         entry: plan.entry,
         seed,
         results: results.map((result, i) => ({ result, profit: profits[i] })),
       })
-      rawRef.current = []
-      setLiveBars([])
+      setLiveBars(rawRef.current)
       setPhase({ kind: 'scan', text: `Identificando oportunidade · ${label}` })
       const statusNext: BotStatus = {
         running: true,
@@ -222,11 +227,14 @@ export default function Operacoes() {
     setLiveBase(null)
     setPhase(null)
     const next = buildScene({ ...input, seed: Date.now() >>> 0 })
+    staticTrades.current = next.status.trades
+    const painted = overlayTrades(rawRef.current, next.status.trades)
+    next.candles = painted
     setForm(input)
     setScene(next)
     setStatus(next.status)
     setLogs(next.logs)
-    setCandles(next.candles)
+    setCandles(painted)
     setLiveBars([])
     setBalance(next.balance)
     setConfigOpen(false)
@@ -287,8 +295,8 @@ export default function Operacoes() {
           <LiveChart
             activeId={form.mode === 'live' ? 1 : (candles.length ? 1 : 0)}
             activeTicker={status?.activeTicker || form.pair}
-            bars={form.mode === 'live' ? liveBars : candles}
-            stream={form.mode === 'live'}
+            bars={form.mode === 'live' ? liveBars : (candles.length ? candles : liveBars)}
+            stream={Boolean(status?.activeTicker || form.pair)}
             onStream={onStream}
             phase={form.mode === 'live' ? phase : null}
           />

@@ -308,7 +308,11 @@ export function buildScene(input: {
   const plan = planSession(input.profit, input.operations, input.payout ?? 0.87)
   const seed = input.seed ?? (Date.now() >>> 0)
   const rng = rngOf(seed || 1)
-  const pair = DEMO_PAIRS.find(p => p.ticker === input.pair) ?? DEMO_PAIRS[0]
+  const pair = DEMO_PAIRS.find(p => p.ticker === input.pair) ?? {
+    ticker: input.pair,
+    price: DEMO_PAIRS[0].price,
+    pip: DEMO_PAIRS[0].pip,
+  }
   const strategy: DemoStrategy = input.strategy ?? 'hard'
   const strategyName = DEMO_STRATEGIES.find(s => s.id === strategy)?.label ?? 'Prime'
   const startBalance = money(Math.max(0, input.startBalance))

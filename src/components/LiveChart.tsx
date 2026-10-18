@@ -37,22 +37,6 @@ function toBar(c: Candle): Bar | null {
   return { time: time as UTCTimestamp, open, high, low, close }
 }
 
-function framePrices(chart: ReturnType<typeof createChart>, bars: Bar[]) {
-  if (bars.length < 2) return
-  let slice = bars.slice(-90)
-  const logical = chart.timeScale().getVisibleLogicalRange()
-  if (logical) {
-    const from = Math.max(0, Math.floor(logical.from))
-    const to = Math.min(bars.length - 1, Math.ceil(logical.to))
-    const visible = bars.slice(from, to + 1)
-    if (visible.length > 5) slice = visible
-  }
-  const low = Math.min(...slice.map(bar => bar.low))
-  const high = Math.max(...slice.map(bar => bar.high))
-  const pad = Math.max((high - low) * 0.12, high * 0.00015)
-  chart.priceScale('right').setVisibleRange({ from: low - pad, to: high + pad })
-}
-
 export default function LiveChart({ activeId, activeTicker, bars, stream, onStream, phase }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const seriesRef = useRef<ReturnType<ReturnType<typeof createChart>['addSeries']> | null>(null)
@@ -89,8 +73,6 @@ export default function LiveChart({ activeId, activeTicker, bars, stream, onStre
       },
       rightPriceScale: {
         borderColor: '#1f1f1f',
-        autoScale: false,
-        scaleMargins: { top: 0.08, bottom: 0.08 },
       },
       timeScale: {
         borderColor: '#1f1f1f',
@@ -132,25 +114,38 @@ export default function LiveChart({ activeId, activeTicker, bars, stream, onStre
 
   const onStreamRef = useRef(onStream)
   onStreamRef.current = onStream
+  const drawnRef = useRef<Bar[]>([])
+
+  useEffect(() => {
+    drawnRef.current = []
+  }, [activeTicker])
 
   useEffect(() => {
     if (!seriesRef.current || !chartRef.current) return
     const next = (bars ?? []).map(toBar).filter((bar): bar is Bar => bar !== null)
     if (!next.length) {
-      seriesRef.current.setData([])
+      if (drawnRef.current.length) {
+        seriesRef.current.setData([])
+        drawnRef.current = []
+      }
       return
     }
-    const el = containerRef.current
-    if (el) {
-      const rect = el.getBoundingClientRect()
-      chartRef.current.applyOptions({
-        width: Math.max(80, Math.floor(rect.width)),
-        height: Math.max(240, Math.floor(rect.height)),
-      })
+    const prev = drawnRef.current
+    const sameWindow = prev.length === next.length && prev[0]?.time === next[0]?.time
+    const onlyLast = sameWindow && prev.slice(0, -1).every((bar, i) =>
+      bar.open === next[i].open && bar.close === next[i].close && bar.high === next[i].high && bar.low === next[i].low,
+    )
+    if (onlyLast) {
+      seriesRef.current.update(next[next.length - 1])
+      drawnRef.current = next
+      return
     }
+    if (sameWindow && prev.every((bar, i) =>
+      bar.open === next[i].open && bar.close === next[i].close && bar.high === next[i].high && bar.low === next[i].low,
+    )) return
     seriesRef.current.setData(next)
-    chartRef.current.timeScale().scrollToRealTime()
-    framePrices(chartRef.current, next)
+    drawnRef.current = next
+    if (!sameWindow) chartRef.current.timeScale().scrollToRealTime()
   }, [bars])
 
   useEffect(() => {
