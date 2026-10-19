@@ -84,13 +84,6 @@ function rngOf(seed: number): () => number {
   }
 }
 
-function pickWins(operations: number, payout: number): number {
-  const minWins = Math.ceil((operations + 1e-9) / (1 + payout))
-  let chosen = Math.min(operations, Math.max(minWins, Math.round(operations * 0.66)))
-  while (chosen < operations && chosen * payout - (operations - chosen) <= 0) chosen += 1
-  return chosen
-}
-
 export function planSession(profit: number, operations: number, payout = 0.87): SessionPlan {
   const n = Math.max(1, Math.floor(operations))
   const p = money(profit)
@@ -98,11 +91,10 @@ export function planSession(profit: number, operations: number, payout = 0.87): 
   if (!(p > 0) || !Number.isFinite(p)) {
     return { profit: p, operations: n, payout: rate, wins: 0, losses: n, entry: 0, possible: false }
   }
-  const wins = pickWins(n, rate)
-  const losses = n - wins
-  const denom = wins * rate - losses
-  const possible = denom > 0
-  const entry = possible ? money(p / denom) : 0
+  const wins = n
+  const losses = 0
+  const entry = money(p / (n * rate))
+  const possible = entry > 0 && Number.isFinite(entry)
   return { profit: p, operations: n, payout: rate, wins, losses, entry, possible }
 }
 
