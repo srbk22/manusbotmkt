@@ -3,6 +3,7 @@ import Operacoes from './Operacoes'
 import Aulas from './Aulas'
 import Suporte from './Suporte'
 import NotificationBell from '../components/NotificationBell'
+import HistoryPlan from '../components/HistoryPlan'
 import sidebarLogoIcon from '../../img/logo icone.png'
 
 type Tab = 'aulas' | 'operacoes' | 'suporte'
@@ -95,6 +96,7 @@ export default function MainApp({ onLogout }: Props) {
   const [compact, setCompact] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia('(max-width: 860px)').matches,
   )
+  const [planOpen, setPlanOpen] = useState(false)
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 860px)')
@@ -126,7 +128,7 @@ export default function MainApp({ onLogout }: Props) {
           <SidebarLogoMark />
           <div className="members-topbar-actions">
             <div className="sidebar-notify-slot">
-              <NotificationBell />
+              <NotificationBell onPress={() => setPlanOpen(true)} />
             </div>
             <button
               type="button"
@@ -205,7 +207,7 @@ export default function MainApp({ onLogout }: Props) {
 
               <div className="sidebar-actions-tools">
                 <div className="sidebar-notify-slot">
-                  <NotificationBell />
+                  <NotificationBell onPress={() => setPlanOpen(true)} />
                 </div>
                 <button
                   type="button"
@@ -223,6 +225,7 @@ export default function MainApp({ onLogout }: Props) {
           )}
         </div>
       </aside>
+      {planOpen && <HistoryPlan onClose={() => setPlanOpen(false)} />}
     </div>
   )
 }

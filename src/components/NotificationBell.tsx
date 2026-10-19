@@ -225,7 +225,21 @@ function IconBack() {
   )
 }
 
-export default function NotificationBell() {
+export default function NotificationBell({ onPress }: { onPress?: () => void }) {
+  if (onPress) {
+    return (
+      <div className="notif-root">
+        <button
+          type="button"
+          className="notif-trigger"
+          onClick={onPress}
+          aria-label="Notificações"
+        >
+          <IconBell />
+        </button>
+      </div>
+    )
+  }
   if (!FEATURE_FLAGS.NOTIFICATIONS_ENABLED) return null
   return <NotificationBellActive />
 }

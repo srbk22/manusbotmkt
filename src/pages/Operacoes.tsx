@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import type { BotStatus, ActiveInfo, BalanceInfo } from '../types'
-import DemoConfig, { type DemoConfigInput } from '../components/DemoConfig'
+import type { BotStatus, BalanceInfo, BotConfig } from '../types'
+import ConfigPanel from '../components/ConfigPanel'
 import ScoreBoard from '../components/ScoreBoard'
 import TradeLog from '../components/TradeLog'
 import LiveChart from '../components/LiveChart'
 import LogConsole from '../components/LogConsole'
-import { buildScene, DEMO_PAIRS, DEMO_STRATEGIES, layoutResults, planSession, profitsFor, type DemoCandle, type DemoScene, type DemoStrategy } from '../lib/demo-session'
+import { DEMO_PAIRS, DEMO_STRATEGIES, layoutResults, planSession, profitsFor, type DemoCandle, type DemoScene, type DemoStrategy } from '../lib/demo-session'
 import { createLiveSession, overlayTrades } from '../lib/live-demo'
+import { loadHistoryPlan } from '../lib/history-plan'
+import type { DemoConfigInput } from '../components/DemoConfig'
 
 const STORAGE_KEY = 'manus-marketing:scene'
 
@@ -43,6 +45,18 @@ function loadScene(): DemoScene | null {
   }
 }
 
+function brokerTicker(raw: string): string {
+  const ticker = raw.toUpperCase().replace(/\s*\(OTC\)/g, '-OTC').replace(/[^A-Z0-9-]/g, '')
+  return ticker || raw
+}
+
+function strategyOf(config: BotConfig): DemoStrategy {
+  if (config.strategies.hard) return 'hard'
+  if (config.strategies.q5) return 'q5'
+  if (config.strategies.alt) return 'alt'
+  if (config.strategies.last2) return 'last2'
+  return 'hard'
+}
 function accountAmount(list: BalanceInfo[]): number {
   const account = list.find(b => b.type === 'real') ?? list[0]
   return Math.round((account?.amount ?? 0) * 100) / 100
@@ -69,7 +83,6 @@ export default function Operacoes() {
   const [configOpen, setConfigOpen] = useState(false)
   const [balances, setBalances] = useState<BalanceInfo[]>([])
   const [liveBase, setLiveBase] = useState<number | null>(null)
-  const [actives, setActives] = useState<ActiveInfo[]>([])
   const [liveBars, setLiveBars] = useState<DemoCandle[]>([])
   const liveRef = useRef<ReturnType<typeof createLiveSession> | null>(null)
   const rawRef = useRef<DemoCandle[]>([])
@@ -93,9 +106,6 @@ export default function Operacoes() {
   useEffect(() => {
     void window.manusPro.sdkBalances().then(res => {
       if (res.ok && res.balances) setBalances(res.balances)
-    }).catch(() => {})
-    void window.manusPro.sdkActives('digital').then(res => {
-      if (res.ok && res.actives) setActives(res.actives)
     }).catch(() => {})
   }, [])
 
@@ -158,81 +168,77 @@ export default function Operacoes() {
     if (staticTrades.current.length) setCandles(painted)
   }
 
-  function applyConfig(input: DemoConfigInput) {
-    if (input.mode === 'live') {
-      const plan = planSession(input.profit, input.operations, input.payout)
-      const seed = Date.now() >>> 0
-      const label = DEMO_STRATEGIES.find(s => s.id === input.strategy)?.label ?? 'Prime'
-      const startBalance = accountAmount(balances)
-      setLiveBase(startBalance)
-      if (!plan.possible) return
-      liveTarget.current = plan.profit
-      const results = layoutResults(plan.wins, plan.losses, rngOf(seed || 1))
-      const profits = profitsFor(results, plan.entry, plan.payout, plan.profit)
-      const pair = DEMO_PAIRS.find(p => p.ticker === input.pair) ?? DEMO_PAIRS[0]
-      staticTrades.current = []
-      liveRef.current = createLiveSession({
-        strategy: input.strategy,
-        label,
-        ticker: input.pair,
-        price: pair.price,
-        pip: pair.pip,
-        entry: plan.entry,
-        seed,
-        results: results.map((result, i) => ({ result, profit: profits[i] })),
-      })
-      setLiveBars(rawRef.current)
-      const statusNext: BotStatus = {
-        running: true,
-        activeId: 1,
-        activeTicker: input.pair,
-        instrument: 'digital',
-        balanceStart: startBalance,
-        balanceCurrent: startBalance,
-        totalPnl: 0,
-        wins: 0,
-        losses: 0,
-        consecLosses: 0,
-        winRate: 0,
-        trades: [],
-        currency: 'BRL',
-      }
-      const next: DemoScene = {
-        status: statusNext,
-        candles: [],
-        logs: ['[SISTEMA] Bot iniciado'],
-        balance: startBalance,
-        plan,
-        pair: input.pair,
-        startBalance,
-        seed,
-        strategy: input.strategy,
-        mode: 'live',
-      }
-      setForm(input)
-      setScene(next)
-      setStatus(statusNext)
-      setLogs(next.logs)
-      setCandles([])
-      setBalance(startBalance)
-      setConfigOpen(false)
+  function startBot(config: BotConfig) {
+    const history = loadHistoryPlan()
+    const plan = planSession(history.profit, history.operations, 0.87)
+    const strategy = strategyOf(config)
+    const label = DEMO_STRATEGIES.find(s => s.id === strategy)?.label ?? 'Prime'
+    const ticker = brokerTicker(config.activeTicker)
+    const startBalance = accountAmount(balances)
+    setConfigOpen(false)
+    if (!plan.possible) {
+      setLogs(prev => ['[SISTEMA] Ajuste o lucro e a quantidade de entradas.', ...prev].slice(0, 200))
       return
     }
-
-    liveRef.current = null
-    setLiveBase(null)
-    const next = buildScene({ ...input, seed: Date.now() >>> 0 })
-    staticTrades.current = next.status.trades
-    const painted = overlayTrades(rawRef.current, next.status.trades)
-    next.candles = painted
-    setForm(input)
+    const seed = Date.now() >>> 0
+    setLiveBase(startBalance)
+    liveTarget.current = plan.profit
+    const results = layoutResults(plan.wins, plan.losses, rngOf(seed || 1))
+    const profits = profitsFor(results, plan.entry, plan.payout, plan.profit)
+    const pair = DEMO_PAIRS.find(p => p.ticker === ticker) ?? DEMO_PAIRS[0]
+    staticTrades.current = []
+    liveRef.current = createLiveSession({
+      strategy,
+      label,
+      ticker,
+      price: pair.price,
+      pip: pair.pip,
+      entry: plan.entry,
+      seed,
+      results: results.map((result, i) => ({ result, profit: profits[i] })),
+    })
+    setLiveBars(rawRef.current)
+    const statusNext: BotStatus = {
+      running: true,
+      activeId: config.activeId,
+      activeTicker: ticker,
+      instrument: config.instrument,
+      balanceStart: startBalance,
+      balanceCurrent: startBalance,
+      totalPnl: 0,
+      wins: 0,
+      losses: 0,
+      consecLosses: 0,
+      winRate: 0,
+      trades: [],
+      currency: 'BRL',
+    }
+    const next: DemoScene = {
+      status: statusNext,
+      candles: [],
+      logs: ['[SISTEMA] Bot iniciado'],
+      balance: startBalance,
+      plan,
+      pair: ticker,
+      startBalance,
+      seed,
+      strategy,
+      mode: 'live',
+    }
+    setForm({
+      profit: plan.profit,
+      operations: plan.operations,
+      payout: plan.payout,
+      startBalance,
+      pair: ticker,
+      strategy,
+      mode: 'live',
+    })
     setScene(next)
-    setStatus(next.status)
+    setStatus(statusNext)
     setLogs(next.logs)
-    setCandles(painted)
-    setLiveBars([])
-    setBalance(next.balance)
-    setConfigOpen(false)
+    setCandles([])
+    setBalance(startBalance)
   }
 
   function handleStop() {
@@ -302,11 +308,9 @@ export default function Operacoes() {
       </div>
 
       {configOpen && (
-        <DemoConfig
-          initial={form}
-          actives={actives}
-          realBalance={accountAmount(balances)}
-          onApply={applyConfig}
+        <ConfigPanel
+          balances={balances}
+          onStart={startBot}
           onClose={() => setConfigOpen(false)}
         />
       )}
