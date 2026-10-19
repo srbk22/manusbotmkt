@@ -170,7 +170,7 @@ export default function Operacoes() {
 
   function startBot(config: BotConfig) {
     const history = loadHistoryPlan()
-    const plan = planSession(history.profit, history.operations, 0.87)
+    const plan = planSession(history.profit, history.operations, history.payout)
     const strategy = strategyOf(config)
     const label = DEMO_STRATEGIES.find(s => s.id === strategy)?.label ?? 'Prime'
     const ticker = brokerTicker(config.activeTicker)
