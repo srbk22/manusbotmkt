@@ -88,7 +88,6 @@ export default function Operacoes() {
   const rawRef = useRef<DemoCandle[]>([])
   const staticTrades = useRef(saved && !savedIsLive ? saved.status.trades : [])
   const runningRef = useRef(false)
-  const liveTarget = useRef(0)
   const [form, setForm] = useState<DemoConfigInput>(saved
     ? {
         profit: saved.plan.profit,
@@ -134,9 +133,7 @@ export default function Operacoes() {
         const closed = step.trades.filter(t => t.result !== 'PENDING')
         const wins = closed.filter(t => t.result === 'WIN').length
         const losses = closed.filter(t => t.result === 'LOSS').length
-        const totalPnl = step.done
-          ? liveTarget.current
-          : Math.round(closed.reduce((sum, t) => sum + t.profit, 0) * 100) / 100
+        const totalPnl = Math.round(closed.reduce((sum, t) => sum + t.profit, 0) * 100) / 100
         return {
           ...prev,
           running: step.done ? false : prev.running,
@@ -182,7 +179,6 @@ export default function Operacoes() {
     }
     const seed = Date.now() >>> 0
     setLiveBase(startBalance)
-    liveTarget.current = plan.profit
     const results = layoutResults(plan.wins, plan.losses, rngOf(seed || 1))
     const profits = profitsFor(results, plan.entry, plan.payout, plan.profit)
     const pair = DEMO_PAIRS.find(p => p.ticker === ticker) ?? DEMO_PAIRS[0]

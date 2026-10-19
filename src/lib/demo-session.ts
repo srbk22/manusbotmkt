@@ -84,6 +84,15 @@ function rngOf(seed: number): () => number {
   }
 }
 
+function closedEntry(profit: number, operations: number, rate: number): number {
+  const exact = profit / (operations * rate)
+  const step = 5
+  const down = Math.max(step, Math.floor(exact / step) * step)
+  const up = Math.max(down, Math.ceil(exact / step) * step)
+  const distance = (entry: number) => Math.abs(operations * entry * rate - profit)
+  return distance(up) < distance(down) ? up : down
+}
+
 export function planSession(profit: number, operations: number, payout = 0.87): SessionPlan {
   const n = Math.max(1, Math.floor(operations))
   const p = money(profit)
@@ -93,7 +102,7 @@ export function planSession(profit: number, operations: number, payout = 0.87): 
   }
   const wins = n
   const losses = 0
-  const entry = money(p / (n * rate))
+  const entry = closedEntry(p, n, rate)
   const possible = entry > 0 && Number.isFinite(entry)
   return { profit: p, operations: n, payout: rate, wins, losses, entry, possible }
 }
@@ -123,28 +132,9 @@ export function layoutResults(wins: number, losses: number, rng: () => number): 
   return out
 }
 
-export function profitsFor(results: Array<'WIN' | 'LOSS'>, entry: number, payout: number, target: number): number[] {
+export function profitsFor(results: Array<'WIN' | 'LOSS'>, entry: number, payout: number, _target: number): number[] {
   const winBase = money(entry * payout)
-  const profits = results.map(r => (r === 'WIN' ? winBase : -entry))
-  const winIdx = results.map((r, i) => (r === 'WIN' ? i : -1)).filter(i => i >= 0)
-  let diff = money(target - profits.reduce((a, b) => a + b, 0))
-  let guard = 0
-  let k = 0
-  while (Math.abs(diff) >= 0.01 && winIdx.length && guard < 20000) {
-    const i = winIdx[k % winIdx.length]
-    const step = diff > 0 ? 0.01 : -0.01
-    const next = money(profits[i] + step)
-    if (next >= 0.01) {
-      profits[i] = next
-      diff = money(diff - step)
-    }
-    k += 1
-    guard += 1
-  }
-  if (Math.abs(diff) >= 0.01 && winIdx.length) {
-    profits[winIdx[0]] = money(profits[winIdx[0]] + diff)
-  }
-  return profits
+  return results.map(r => (r === 'WIN' ? winBase : money(-entry)))
 }
 
 function entrySecond(rng: () => number): number {

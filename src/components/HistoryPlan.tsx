@@ -105,7 +105,7 @@ export default function HistoryPlan({ onClose }: Props) {
             </label>
             {plan.possible ? (
               <p className="bot-config-preview">
-                Em {plan.operations} entradas, coloque {formatCurrency(plan.entry, 'BRL')} em cada uma para fechar {formatCurrency(plan.profit, 'BRL')}.
+                Em {plan.operations} entradas, coloque {formatCurrency(plan.entry, 'BRL')} em cada uma. O lucro fica perto de {formatCurrency(plan.profit, 'BRL')}.
               </p>
             ) : (
               <p className="bot-config-inline-warn" role="alert">
