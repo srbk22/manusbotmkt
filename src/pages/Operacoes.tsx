@@ -178,9 +178,10 @@ export default function Operacoes() {
       return
     }
     const seed = Date.now() >>> 0
+    const entry = Math.round(config.entryAmount * 100) / 100
     setLiveBase(startBalance)
     const results = layoutResults(plan.wins, plan.losses, rngOf(seed || 1))
-    const profits = profitsFor(results, plan.entry, plan.payout, plan.profit)
+    const profits = profitsFor(results, entry, plan.payout, plan.profit)
     const pair = DEMO_PAIRS.find(p => p.ticker === ticker) ?? DEMO_PAIRS[0]
     staticTrades.current = []
     liveRef.current = createLiveSession({
@@ -189,7 +190,7 @@ export default function Operacoes() {
       ticker,
       price: pair.price,
       pip: pair.pip,
-      entry: plan.entry,
+      entry,
       seed,
       results: results.map((result, i) => ({ result, profit: profits[i] })),
     })
